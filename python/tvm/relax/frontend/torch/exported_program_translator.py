@@ -198,6 +198,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "atan.default": self._unary_op(relax.op.atan),
             "atanh.default": self._unary_op(relax.op.atanh),
             "clamp.default": self._clamp,
+            "clamp_min.default": self._clamp_min,
             "cos.default": self._unary_op(relax.op.cos),
             "cosh.default": self._unary_op(relax.op.cosh),
             "dropout.default": lambda node: self.env[node.args[0]],
