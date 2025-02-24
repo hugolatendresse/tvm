@@ -118,7 +118,8 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
                 print(dir(node))
                 print("node name:", node.name)
                 print("node stack trace", node.stack_trace)
-                print("node type", node.type)   
+                print("node type", node.type)
+                print("DONE PRINTING NODE FAILED")   
                 raise Exception("Node failed!!!!")
 
         return convert
@@ -808,6 +809,10 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
     def _cat(self, node: fx.Node) -> relax.Var:
         args = self.retrieve_args(node)
         axis = args[1] if len(node.args) > 1 else node.kwargs.get("dim", 0)
+        print("CALLING CAT!!!")
+        print("args[0] type", type(args[0]))
+        print("node name: ", node.name)
+        print("DONE CALLING CAT!!!")
         return self.block_builder.emit(relax.op.concat(args[0], axis=axis))
 
     def _chunk(self, node: fx.Node) -> relax.Var:

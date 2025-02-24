@@ -92,12 +92,14 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         )
 
     def _batch_norm(self, node: fx.Node) -> relax.Var:
+        print("PRINTING BATCH NORM")
         print("type(node): ",type(node))
         print("node: ",node)
         print("type(node.args): ",type(node.args))
         print("node.args: ",node.args)
         print("type(node.args[0]): ",type(node.args[0]))
         print("node.args[0]: ",node.args[0])
+        print("DONE PRINTING BATCH NORM")
 
         x = self.env[node.args[0]] 
         gamma = self.env[node.args[1]] 
