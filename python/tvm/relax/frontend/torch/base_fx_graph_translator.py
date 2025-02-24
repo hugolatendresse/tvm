@@ -110,16 +110,16 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
             try:
                 return self.block_builder.emit(op(self.env[node.args[0]]))
             except:
-                # print("THIS NODE FAILED!!!!")
-                # print(node)
-                # print(node.args)
-                # print(node.kwargs)
-                # print(id(node))
-                # print(dir(node))
-                # print("node name:", node.name)
-                # print("node stack trace", node.stack_trace)
-                # print("node type", node.type)
-                # print("DONE PRINTING NODE FAILED")   
+                print("THIS NODE FAILED!!!!")
+                print(node)
+                print(node.args)
+                print(node.kwargs)
+                print(id(node))
+                print(dir(node))
+                print("node name:", node.name)
+                print("node stack trace", node.stack_trace)
+                print("node type", node.type)
+                print("DONE PRINTING NODE FAILED")   
                 raise Exception("Node failed!!!!")
 
         return convert
@@ -201,9 +201,15 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         return self.block_builder.emit(relax.op.round(arg))
 
     def _softmax(self, node: fx.Node) -> relax.Var:
+        print("ENTERING _softmax() in base_fx_graph_importer.py")
         x = self.env[node.args[0]]
         dim = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim", -1)
-        return self.block_builder.emit(relax.op.nn.softmax(x, dim))
+        print("_softmax about to call relax.op.nn.softmax")
+        relax_expr = relax.op.nn.softmax(x, dim)
+        print("_softmax called relax.op.nn.softmax and about to call self.block_builder.emit")
+        emited_block =  self.block_builder.emit(relax_expr)
+        print("_softmax() done!!")
+        return emited_block
 
     def _tril_triu(self, op: Callable) -> Callable:
         from torch import fx
