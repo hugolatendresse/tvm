@@ -110,16 +110,16 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
             try:
                 return self.block_builder.emit(op(self.env[node.args[0]]))
             except:
-                print("THIS NODE FAILED!!!!")
-                print(node)
-                print(node.args)
-                print(node.kwargs)
-                print(id(node))
-                print(dir(node))
-                print("node name:", node.name)
-                print("node stack trace", node.stack_trace)
-                print("node type", node.type)
-                print("DONE PRINTING NODE FAILED")   
+                # print("THIS NODE FAILED!!!!")
+                # print(node)
+                # print(node.args)
+                # print(node.kwargs)
+                # print(id(node))
+                # print(dir(node))
+                # print("node name:", node.name)
+                # print("node stack trace", node.stack_trace)
+                # print("node type", node.type)
+                # print("DONE PRINTING NODE FAILED")   
                 raise Exception("Node failed!!!!")
 
         return convert
