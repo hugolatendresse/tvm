@@ -107,7 +107,19 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         from torch import fx
 
         def convert(node: fx.Node) -> relax.Var:
-            return self.block_builder.emit(op(self.env[node.args[0]]))
+            try:
+                return self.block_builder.emit(op(self.env[node.args[0]]))
+            except:
+                print("THIS NODE FAILED!!!!")
+                print(node)
+                print(node.args)
+                print(node.kwargs)
+                print(id(node))
+                print(dir(node))
+                print("node name:", node.name)
+                print("node stack trace", node.stack_trace)
+                print("node type", node.type)   
+                raise Exception("Node failed!!!!")
 
         return convert
 
@@ -735,6 +747,14 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         axis = args[1] if len(node.args) > 1 else node.kwargs.get("dim", 0)
         return self.block_builder.emit(relax.op.concat(args[0], axis=axis))
 
+    def _chunk(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]  
+        chunks = node.args[1]
+       # TODO below might just pass none if node.args <= 2 ?
+        dim = node.args[2] if len(node.args) > 2 else node.kwargs.get("dim", 0)
+        name = node.args[3] if len(node.args) > 3 else node.kwargs.get("name", None)
+        return self.block_builder.emit(relax.op.chunk(x, chunks, dim, name))
+
     def _cumsum(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
 
@@ -848,6 +868,18 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         return self.block_builder.emit(relax.op.permute_dims(args[0], full_idx))
 
     ########## Creation ##########
+
+    def _detach(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        # if len(node.args) == 2:
+        #     if isinstance(node.args[1], torch.dtype):
+        #         dtype = self._convert_data_type(node.args[1], self.env)
+        #         return self.block_builder.emit(relax.op.astype(x, dtype))
+        # elif "dtype" in node.kwargs:
+        #     dtype = self._convert_data_type(node.kwargs["dtype"], self.env)
+        #     return self.block_builder.emit(relax.op.astype(x, dtype))
+        return x
+
 
     def _to_copy(self, node: fx.Node) -> relax.Var:
         import torch  # type: ignore

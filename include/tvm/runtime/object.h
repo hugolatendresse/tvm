@@ -935,7 +935,7 @@ inline ObjectPtr<BaseType> GetObjectPtr(ObjType* ptr) {
 template <typename SubRef, typename BaseRef>
 inline SubRef Downcast(BaseRef ref) {
   if (ref.defined()) {
-    ICHECK(ref->template IsInstance<typename SubRef::ContainerType>())
+    ICHECK(ref->te1mplate IsInstance<typename SubRef::ContainerType>())
         << "Downcast from " << ref->GetTypeKey() << " to " << SubRef::ContainerType::_type_key
         << " failed.";
   } else {

@@ -91,6 +91,41 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             )
         )
 
+    def _batch_norm(self, node: fx.Node) -> relax.Var:
+        print("type(node): ",type(node))
+        print("node: ",node)
+        print("type(node.args): ",type(node.args))
+        print("node.args: ",node.args)
+        print("type(node.args[0]): ",type(node.args[0]))
+        print("node.args[0]: ",node.args[0])
+
+        x = self.env[node.args[0]] 
+        gamma = self.env[node.args[1]] 
+        beta = self.env[node.args[2]]
+        moving_mean = self.env[node.args[3]]
+        moving_var = self.env[node.args[4]]
+        center = node.args[5] if len(node.args) > 5 else None # TODO copilot suggests node.kwargs.get("center", True)]
+        momentum = node.args[6] if len(node.args) > 6 else None # TODO copilot says node.kwargs.get("momentum", 0.1)
+        eps = node.args[7] if len(node.args) > 4 else 1e-05
+        scale = node.args[8] if len(node.args) > 8 else None 
+        
+        return self.block_builder.emit( # adds the line of relax function into the ir function  (and produces left hand side) 
+            relax.op.nn.batch_norm(# creates RHS of a line in a relax fonction (starts with R.Tensor... or R.call_tir...)
+                data=x, 
+                gamma=gamma,
+                beta=beta, 
+                moving_mean=moving_mean,
+                moving_var=moving_var,
+                axis = 1, # TODO ?????
+                epsilon=eps,
+                center=center,
+                scale=scale,
+                momentum=momentum
+            )[0] # ruihang prefers
+        )
+
+
+
     def _upsample_impl(
         self, x: relax.Expr, size, align_corners: bool, scale_factor, method: str
     ) -> relax.Var:
@@ -222,6 +257,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
                 self.env[node.args[1]], self.env[node.args[0]]
             ),
             "group_norm.default": self._group_norm,
+            "batch_norm.default": self._batch_norm,
             "layer_norm.default": self._layer_norm,
             "linear.default": self._linear,
             "max_pool2d.default": self._max_pool2d,
@@ -237,11 +273,13 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "argmin.default": self._argmax_argmin(relax.op.argmin),
             # tensor manipulation
             "cat.default": self._cat,
+            "chunk.default": self._chunk,
             "concat.default": self._cat,
             "cumsum.default": self._cumsum,
             "expand.default": self._expand,
             "permute.default": self._permute,
             "repeat.default": self._repeat,
+            "reshape.default": self._reshape,
             "select.int": self._select,
             "slice.Tensor": self._slice,
             "split.Tensor": self._split,
@@ -255,6 +293,8 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "view.default": self._reshape,
             # tensor creation
             "_to_copy.default": self._to_copy,
+            "lift_fresh_copy.default": self._to_copy,
+            "detach_.default": self._detach,
             "arange.start": self._arange,
             "clone.default": lambda node: self.env[node.args[0]],
             "empty.memory_format": self._empty,
@@ -323,6 +363,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             with self.block_builder.dataflow():
                 # Translate the model.
                 for node in nodes:
+                    # print(node)
                     if node.op == "placeholder":
                         if "grapharg" in node.meta and node.meta["grapharg"].fake_tensor is None:
                             # Ignore sym input
