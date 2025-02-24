@@ -124,8 +124,6 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             )[0] # ruihang prefers
         )
 
-
-
     def _upsample_impl(
         self, x: relax.Expr, size, align_corners: bool, scale_factor, method: str
     ) -> relax.Var:
@@ -154,7 +152,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         align_corners = (
             node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", True)
         )
-        scale_factor = node.args[3] if len(node.args) > 3 else node.kwargs.get("scale_factor", None)
+        scale_factor = node.args[3] if len(node.args) > 3 else node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
         return self._upsample_impl(x, size, align_corners, scale_factor, "linear")
 
     def _upsample_nearest2d(self, node: fx.node) -> relax.Var:
@@ -163,7 +161,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         align_corners = (
             node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", True)
         )
-        scale_factor = node.args[3] if len(node.args) > 3 else node.kwargs.get("scale_factor", None)
+        scale_factor = node.args[3] if len(node.args) > 3 else node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
         return self._upsample_impl(x, size, align_corners, scale_factor, "nearest_neighbor")
 
     ########## Manipulation ##########
@@ -280,6 +278,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "concat.default": self._cat,
             "cumsum.default": self._cumsum,
             "expand.default": self._expand,
+            "expand_as.default": self._expand_as,
             "permute.default": self._permute,
             "repeat.default": self._repeat,
             "reshape.default": self._reshape,
@@ -299,6 +298,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "lift_fresh_copy.default": self._to_copy,
             "detach_.default": self._detach,
             "arange.start": self._arange,
+            "contiguous.default": lambda node: self.env[node.args[0]], # TODO would be more efficient to not always do this, and only do it if not contiguous, but need to find a way to check 
             "clone.default": lambda node: self.env[node.args[0]],
             "empty.memory_format": self._empty,
             "fill.Scalar": self._fill,
