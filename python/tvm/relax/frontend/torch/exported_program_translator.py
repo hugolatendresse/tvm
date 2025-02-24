@@ -238,6 +238,8 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "pow.Tensor_Scalar": self._binary_op(relax.op.power, operator.pow),
             "pow.Tensor_Tensor": self._binary_op(relax.op.power, operator.pow),
             "sub.Tensor": self._binary_op(relax.op.subtract, operator.sub),
+            # linear algebra
+            "linalg_vector_norm.default": self._linalg_vector_norm,
             # neural network
             "_native_batch_norm_legit_no_training.default": self._batch_norm_legit_no_training,
             "adaptive_avg_pool2d.default": self._adaptive_avg_pool2d,
