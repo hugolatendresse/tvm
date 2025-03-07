@@ -258,15 +258,67 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         return self.block_builder.emit(relax.op.round(arg))
 
     def _softmax(self, node: fx.Node) -> relax.Var:
+        """
+        Enhanced softmax implementation that handles large tensors with non-last dimensions.
+        For large tensors with non-last dimension softmax, we transpose to move the softmax 
+        dimension to the end, apply softmax, then transpose back to the original shape.
+        """
         print("ENTERING _softmax() in base_fx_graph_importer.py")
         x = self.env[node.args[0]]
         dim = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim", -1)
+        
+        # Get information about the input tensor
+        input_shape = x.struct_info.shape
+        input_ndim = len(input_shape)
+        
+        # Normalize negative dim
+        if dim < 0:
+            dim = input_ndim + dim
+        
+        # Check if this is a non-last dimension with large size (>4096)
+        is_large_non_last_dim = False
+        large_size_threshold = 4096
+        
+        if dim != input_ndim - 1:  # Not the last dimension
+            try:
+                # Check if any dimension is large
+                for i, size in enumerate(input_shape):
+                    if hasattr(size, 'value') and size.value > large_size_threshold:
+                        is_large_non_last_dim = True
+                        break
+            except:
+                # If we can't determine the size, play it safe
+                pass
+        
         print("_softmax about to call relax.op.nn.softmax")
-        relax_expr = relax.op.nn.softmax(x, dim)
-        print("_softmax called relax.op.nn.softmax and about to call self.block_builder.emit")
-        emited_block =  self.block_builder.emit(relax_expr)
-        print("_softmax() done!!")
-        return emited_block
+        
+        if is_large_non_last_dim:
+            # Special handling for large tensors with non-last dimension softmax
+            
+            # 1. Get the dimension ordering for transpose
+            dims = list(range(input_ndim))
+            # Move the softmax dimension to the end
+            dims.append(dims.pop(dim))
+            
+            # 2. Transpose to move softmax dim to the end
+            x_transposed = self.block_builder.emit(relax.op.permute_dims(x, dims))
+            
+            # 3. Apply softmax on the last dimension
+            softmax_result = self.block_builder.emit(relax.op.nn.softmax(x_transposed, -1))
+            
+            # 4. Transpose back to original shape
+            # Calculate the inverse permutation
+            inv_dims = [-1] * len(dims)
+            for i, d in enumerate(dims):
+                inv_dims[d] = i
+            
+            # 5. Apply the inverse permutation
+            result = self.block_builder.emit(relax.op.permute_dims(softmax_result, inv_dims))
+        else:
+            # Regular softmax for last dimension or small tensors
+            result = self.block_builder.emit(relax.op.nn.softmax(x, dim))
+        
+        return result
 
     def _selu(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
