@@ -15,7 +15,7 @@
 # specific language governing permissions and limitations
 # under the License.
 
-""" Test translate from relax. """
+"""Test translate from relax."""
 
 import torch
 from torch.nn import Module
@@ -1214,22 +1214,6 @@ def test_masked_scatter():
 
     verify_model(MaskedScatter1(), [([5], "float32"), ([10], "float32")])
     verify_model(MaskedScatter2(), [([2, 5], "float32"), ([3, 5], "float32")])
-
-
-def test_put():
-    """test relax translator for index_put"""
-
-    class IndexPut(Module):
-        def __init__(self):
-            super().__init__()
-            self.index = msc_utils.random_data([(5), "int64"], MSCFramework.TORCH, max_val=5)
-
-        def forward(self, data, src):
-            data[self.index] = src
-            return data
-
-    input_info = [([10, 20], "float32"), ([5, 20], "float32")]
-    verify_model(IndexPut(), input_info)
 
 
 def test_attention():

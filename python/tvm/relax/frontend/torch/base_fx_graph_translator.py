@@ -124,6 +124,34 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
 
         return convert
 
+    def _celu(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        alpha = node.args[1] if len(node.args) > 1 else node.kwargs.get("alpha", 1.0)
+        dtype = x.struct_info.dtype
+
+        if isinstance(alpha, (int, float)):
+            alpha = relax.const(alpha, dtype)
+        else:
+            if not isinstance(alpha, relax.Var):
+                alpha = self.block_builder.emit(relax.const(alpha, dtype))
+
+        zero = relax.const(0, dtype)
+        # alpha * min(0, exp(x / alpha) - 1) + max(0, x)
+        return self.block_builder.emit(
+            relax.op.add(
+                relax.op.multiply(
+                    alpha,
+                    relax.op.minimum(
+                        zero,
+                        relax.op.subtract(
+                            relax.op.divide(relax.op.exp(x), alpha), relax.const(1, dtype)
+                        ),
+                    ),
+                ),
+                relax.op.nn.relu(x),
+            )
+        )
+
     def _clamp(self, node: fx.Node) -> relax.Expr:
         args = self.retrieve_args(node)
         a_min = args[1] if len(args) > 1 else node.kwargs["min"]
@@ -158,6 +186,28 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
             )
         return self.block_builder.emit(relax.op.clip(args[0], a_min, a_max))
 
+    def _elu(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        alpha = node.args[1] if len(node.args) > 1 else node.kwargs.get("alpha", 1.0)
+        dtype = x.struct_info.dtype
+
+        if isinstance(alpha, (int, float)):
+            alpha = relax.const(-alpha, dtype)
+        else:
+            if not isinstance(alpha, relax.Var):
+                alpha = self.block_builder.emit(relax.const(-alpha, dtype))
+
+        # alpha * ReLU(1 − exp(x)) + ReLU(x)
+        return self.block_builder.emit(
+            relax.op.add(
+                relax.op.multiply(
+                    alpha,
+                    relax.op.nn.relu(relax.op.subtract(relax.const(1, dtype), relax.op.exp(x))),
+                ),
+                relax.op.nn.relu(x),
+            )
+        )
+
     def _gelu(self, node: fx.Node) -> relax.Expr:
         approximate = node.kwargs.get("approximate", "none")
         if approximate == "none":
@@ -183,6 +233,13 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         x1 = relax.op.clip(x0, 0, 6)
         x2 = relax.op.divide(x1, relax.const(6, dtype))
         return self.block_builder.emit(relax.op.multiply(x, x2))
+
+    def _hardtanh(self, node: fx.Node) -> relax.Expr:
+        args = self.retrieve_args(node)
+        x = args[0]
+        min_val = node.kwargs.get("min_val", -1.0)
+        max_val = node.kwargs.get("max_val", 1.0)
+        return self.block_builder.emit(relax.op.clip(x, min_val, max_val))
 
     def _leakyrelu(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
@@ -210,6 +267,37 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         emited_block =  self.block_builder.emit(relax_expr)
         print("_softmax() done!!")
         return emited_block
+
+    def _selu(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        alpha = node.args[1] if len(node.args) > 1 else node.kwargs.get("alpha", 1.6732631921768188)
+        gamma = node.args[2] if len(node.args) > 2 else node.kwargs.get("gamma", 1.0507009873554805)
+        dtype = x.struct_info.dtype
+
+        if isinstance(alpha, (int, float)):
+            alpha = relax.const(alpha, dtype)
+        else:
+            if not isinstance(alpha, relax.Var):
+                alpha = self.block_builder.emit(relax.const(alpha, dtype))
+
+        if isinstance(gamma, (int, float)):
+            gamma = relax.const(gamma, dtype)
+        else:
+            if not isinstance(gamma, relax.Var):
+                gamma = self.block_builder.emit(relax.const(gamma, dtype))
+
+        # gamma * (ReLU(x) + alpha * (exp(x) - 1))
+        return self.block_builder.emit(
+            relax.op.multiply(
+                gamma,
+                relax.op.add(
+                    relax.op.nn.relu(x),
+                    relax.op.multiply(
+                        alpha, relax.op.subtract(relax.op.exp(x), relax.const(1, dtype))
+                    ),
+                ),
+            )
+        )
 
     def _tril_triu(self, op: Callable) -> Callable:
         from torch import fx
@@ -861,6 +949,21 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         other_shape = self.shape_of(args[1])  # This is the shape of 'other'
         return self.block_builder.emit(relax.op.broadcast_to(data, other_shape))
 
+    def _flip(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        dims = node.args[1] if len(node.args) > 1 else node.kwargs.get("dims", None)
+        if isinstance(dims, (list, tuple)) and len(dims) > 0:
+            dims = dims[0]
+        elif not isinstance(dims, int):
+            raise TypeError(f"flip expects an integer axis, but got {type(dims)}: {dims}")
+        return self.block_builder.emit(relax.op.flip(x, dims))
+
+    def _gather(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        dim = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim", 0)
+        index = self.env[node.args[2]]
+        return self.block_builder.emit(relax.op.gather_elements(x, index, axis=dim))
+
     def _permute(self, node: fx.Node) -> relax.Var:
         import torch  # type: ignore
 
@@ -934,6 +1037,12 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
             else:
                 s_shape.append(s)
         return self.block_builder.emit(relax.op.reshape(cat, s_shape))
+
+    def _take(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        indices = self.env[node.args[1]]
+        indices = self.block_builder.emit(relax.op.astype(indices, "int32"))
+        return self.block_builder.emit(relax.op.take(x, indices))
 
     def _tile(self, node: fx.Node) -> relax.Var:
         import torch  # type: ignore

@@ -55,7 +55,7 @@ from .ty import (
     Type,
     ObjectType,
     ShapeType,
-    DynTensorType,
+    TensorType,
     TupleType,
     FuncType,
     PackedFuncType,
@@ -114,6 +114,6 @@ from . import frontend
 from . import utils
 
 # VM
-from .vm_build import build, Executable
+from .vm_build import build, VMExecutable
 
 from .binding_rewrite import DataflowBlockRewrite
