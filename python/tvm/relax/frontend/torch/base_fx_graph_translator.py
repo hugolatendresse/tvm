@@ -968,7 +968,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         length_dim = int(self.shape_of(x)[dim])
         print("length_dim is",length_dim)
         print("length_dim has type ",type(length_dim))
-        n_section = math.ceil(length_dim / chunks) # TODO try normal division??
+        n_section = math.ceil(length_dim / chunks) 
         return self.block_builder.emit(relax.op.split(x, n_section, dim))
 
     def _cumsum(self, node: fx.Node) -> relax.Var:
