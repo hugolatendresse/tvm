@@ -441,7 +441,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
                         assert len(list(node.kwargs.keys())) == 0, f"{node.name} has non-empty kwargs!"
                         assert not node.kwargs, f"{node.name} has non-empty kwargs!"
                         func_name = node.target.__name__
-                        print("Found a func_name of ",func_name)
+                        # print("Found a func_name of ",func_name)
                         assert (
                             func_name in self.convert_map
                         ), f"Unsupported function type {func_name}"
