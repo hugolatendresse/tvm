@@ -99,6 +99,7 @@ class TVMQuantizerFactory(object):
                 output: np.ndarray or list<np.ndarray>
                     The modified output ndarray.
                 """
+
                 if self._calibrated:
                     return super()._execute_after_forward(outputs)
                 output_num = len(outputs) - len(self._gather_names)
