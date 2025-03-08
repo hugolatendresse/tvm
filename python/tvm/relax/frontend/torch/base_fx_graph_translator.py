@@ -107,7 +107,20 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         from torch import fx
 
         def convert(node: fx.Node) -> relax.Var:
-            return self.block_builder.emit(op(self.env[node.args[0]]))
+            try:
+                return self.block_builder.emit(op(self.env[node.args[0]]))
+            except:
+                print("THIS NODE FAILED!!!!")
+                print(node)
+                print(node.args)
+                print(node.kwargs)
+                print(id(node))
+                print(dir(node))
+                print("node name:", node.name)
+                print("node stack trace", node.stack_trace)
+                print("node type", node.type)
+                print("DONE PRINTING NODE FAILED")   
+                raise Exception("Node failed!!!!")
 
         return convert
 
@@ -143,6 +156,24 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         args = self.retrieve_args(node)
         a_min = args[1] if len(args) > 1 else node.kwargs["min"]
         a_max = args[2] if len(args) > 2 else node.kwargs["max"]
+        if not isinstance(a_min, (int, float)):
+            raise ValueError(
+                f"TVM only supports constant min value for torch.clamp/clip, "
+                f"but got {a_min} with type {type(a_min)}"
+            )
+        if not isinstance(a_max, (int, float)):
+            raise ValueError(
+                f"TVM only supports constant max value for torch.clamp/clip, "
+                f"but got {a_max} with type {type(a_max)}"
+            )
+        return self.block_builder.emit(relax.op.clip(args[0], a_min, a_max))
+
+
+    def _clamp_min(self, node: fx.Node) -> relax.Expr:
+        args = self.retrieve_args(node)
+        a_min = args[1] if len(args) > 1 else node.kwargs["min"]
+        import math
+        a_max = math.inf
         if not isinstance(a_min, (int, float)):
             raise ValueError(
                 f"TVM only supports constant min value for torch.clamp/clip, "
@@ -227,9 +258,70 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         return self.block_builder.emit(relax.op.round(arg))
 
     def _softmax(self, node: fx.Node) -> relax.Var:
+        """
+        Enhanced softmax implementation that handles large tensors with non-last dimensions.
+        For large tensors with non-last dimension softmax, we transpose to move the softmax 
+        dimension to the end, apply softmax, then transpose back to the original shape.
+        """
+        print("ENTERING _softmax() in base_fx_graph_importer.py")
+        print("the kwargs type is",type(node.kwargs))
+        print("the raw kwargs are: ",node.kwargs)
+        print("the kwargs are: ",list(node.kwargs.keys()))
         x = self.env[node.args[0]]
         dim = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim", -1)
-        return self.block_builder.emit(relax.op.nn.softmax(x, dim))
+        
+        # Get information about the input tensor
+        input_shape = x.struct_info.shape
+        input_ndim = len(input_shape)
+        
+        # Normalize negative dim
+        if dim < 0:
+            dim = input_ndim + dim
+        
+        # Check if this is a non-last dimension with large size (>4096)
+        is_large_non_last_dim = False
+        large_size_threshold = 4096
+        
+        if dim != input_ndim - 1:  # Not the last dimension
+            try:
+                # Check if any dimension is large
+                for i, size in enumerate(input_shape):
+                    if hasattr(size, 'value') and size.value > large_size_threshold:
+                        is_large_non_last_dim = True
+                        break
+            except:
+                # If we can't determine the size, play it safe
+                pass
+        
+        print("_softmax about to call relax.op.nn.softmax")
+        
+        if is_large_non_last_dim:
+            # Special handling for large tensors with non-last dimension softmax
+            
+            # 1. Get the dimension ordering for transpose
+            dims = list(range(input_ndim))
+            # Move the softmax dimension to the end
+            dims.append(dims.pop(dim))
+            
+            # 2. Transpose to move softmax dim to the end
+            x_transposed = self.block_builder.emit(relax.op.permute_dims(x, dims))
+            
+            # 3. Apply softmax on the last dimension
+            softmax_result = self.block_builder.emit(relax.op.nn.softmax(x_transposed, -1))
+            
+            # 4. Transpose back to original shape
+            # Calculate the inverse permutation
+            inv_dims = [-1] * len(dims)
+            for i, d in enumerate(dims):
+                inv_dims[d] = i
+            
+            # 5. Apply the inverse permutation
+            result = self.block_builder.emit(relax.op.permute_dims(softmax_result, inv_dims))
+        else:
+            # Regular softmax for last dimension or small tensors
+            result = self.block_builder.emit(relax.op.nn.softmax(x, dim))
+        
+        return result
 
     def _selu(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
@@ -305,6 +397,51 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
             return intrinsic_op(lhs, rhs)
 
         return convert
+    
+    ########## Linear Algebra ##########
+
+    def _linalg_vector_norm(self, node: fx.Node) -> relax.Var:
+
+        args = self.retrieve_args(node)
+
+        # The PyTorch signature is typically something like
+        # torch.linalg.vector_norm(input, ord=2, dim=None, keepdim=False, dtype=None)
+        # Adjust as needed depending on how you retrieve arguments.
+        data = args[0]
+        # Default ord=2 if not supplied
+        ord_val = args[1] if len(args) > 1 else 2.0
+        dim = args[2] if len(args) > 2 else None
+        keepdim = args[3] if len(args) > 3 else False
+
+        # If ord_val is a Python float/int, wrap it in a Relax const
+        # so that it matches data's dtype.  If ord_val is already an Expr, you can skip this.
+        dtype = data.struct_info.dtype
+        ord_expr = (
+            ord_val
+            if isinstance(ord_val, relax.Expr)
+            else relax.const(float(ord_val), dtype)
+        )
+        # Reciprocal
+        reci_expr = (
+            relax.op.divide(
+                relax.const(1.0, dtype),
+                ord_expr
+            )
+            if isinstance(ord_val, relax.Expr)
+            else relax.const(1.0 / float(ord_val), dtype)
+        )
+
+        # abs(data)
+        abs_data = self.block_builder.emit(relax.op.abs(data))
+        # abs_data^ord
+        abs_data_pow = self.block_builder.emit(relax.op.power(abs_data, ord_expr))
+        # sum over dim
+        reduced = self.block_builder.emit(relax.op.sum(abs_data_pow, dim, keepdims=keepdim))
+        # (sum(...))^(1/ord)
+        norm_val = self.block_builder.emit(relax.op.power(reduced, reci_expr))
+
+        return norm_val
+
 
     ########## Neural Network ##########
 
@@ -574,6 +711,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         bias = args[2] if len(args) > 2 else None
         stride = args[3] if len(args) > 3 else 1
         padding = args[4] if len(args) > 4 else 0
+        print(f"got a stride of {stride} and a padding of {padding}")
         dilation = args[5] if len(args) > 5 else 1
         groups = args[6] if len(args) > 6 else 1
         return self._conv2d_impl(
@@ -823,6 +961,14 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         axis = args[1] if len(node.args) > 1 else node.kwargs.get("dim", 0)
         return self.block_builder.emit(relax.op.concat(args[0], axis=axis))
 
+    def _chunk(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]  
+        chunks = node.args[1]
+       # TODO below might just pass none if node.args <= 2 ?
+        dim = node.args[2] if len(node.args) > 2 else node.kwargs.get("dim", 0)
+        name = node.args[3] if len(node.args) > 3 else node.kwargs.get("name", None)
+        return self.block_builder.emit(relax.op.chunk(x, chunks, dim, name))
+
     def _cumsum(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
 
@@ -846,6 +992,14 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
             else:
                 broadcast_shape.append(i)
         return self.block_builder.emit(relax.op.broadcast_to(args[0], broadcast_shape))
+
+    def _expand_as(self, node: fx.Node) -> relax.Var:
+        args = self.retrieve_args(node)
+        # args[0] -> 'self' tensor
+        # args[1] -> 'other' tensor
+        data = args[0]
+        other_shape = self.shape_of(args[1])  # This is the shape of 'other'
+        return self.block_builder.emit(relax.op.broadcast_to(data, other_shape))
 
     def _flip(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
@@ -957,6 +1111,18 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         return self.block_builder.emit(relax.op.permute_dims(args[0], full_idx))
 
     ########## Creation ##########
+
+    def _detach(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        # if len(node.args) == 2:
+        #     if isinstance(node.args[1], torch.dtype):
+        #         dtype = self._convert_data_type(node.args[1], self.env)
+        #         return self.block_builder.emit(relax.op.astype(x, dtype))
+        # elif "dtype" in node.kwargs:
+        #     dtype = self._convert_data_type(node.kwargs["dtype"], self.env)
+        #     return self.block_builder.emit(relax.op.astype(x, dtype))
+        return x
+
 
     def _to_copy(self, node: fx.Node) -> relax.Var:
         import torch  # type: ignore

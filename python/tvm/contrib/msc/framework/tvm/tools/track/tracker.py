@@ -97,6 +97,7 @@ class TVMTrackerFactory(object):
                 output: np.ndarray or list<np.ndarray>
                     The modified output ndarray.
                 """
+                print("INSIDE TRACKER.PY - _execute_after_forward !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 
                 output_num = len(outputs) - len(self._track_names)
                 for data, name in zip(outputs[output_num:], self._track_names):
