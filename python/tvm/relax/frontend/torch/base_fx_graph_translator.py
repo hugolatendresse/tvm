@@ -373,15 +373,13 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
 
         return convert
     
+
     ########## Linear Algebra ##########
 
     def _linalg_vector_norm(self, node: fx.Node) -> relax.Var:
 
         args = self.retrieve_args(node)
 
-        # The PyTorch signature is typically something like
-        # torch.linalg.vector_norm(input, ord=2, dim=None, keepdim=False, dtype=None)
-        # Adjust as needed depending on how you retrieve arguments.
         data = args[0]
         # Default ord=2 if not supplied
         ord_val = args[1] if len(args) > 1 else 2.0
@@ -389,7 +387,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         keepdim = args[3] if len(args) > 3 else False
 
         # If ord_val is a Python float/int, wrap it in a Relax const
-        # so that it matches data's dtype.  If ord_val is already an Expr, you can skip this.
+        # so that it matches data's dtype. 
         dtype = data.struct_info.dtype
         ord_expr = (
             ord_val
