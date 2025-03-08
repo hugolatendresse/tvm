@@ -77,7 +77,6 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         gamma = self.env[node.args[2]] if len(node.args) > 2 else None
         beta = self.env[node.args[3]] if len(node.args) > 3 else None
         eps = node.args[4] if len(node.args) > 4 else 1e-05
-        print(f"group norm has x: {x}, num_groups: {num_groups}, gamma: {gamma}, beta: {beta}, eps: {eps}")
 
         dim = len(self.shape_of(x))
         return self.block_builder.emit(
@@ -93,15 +92,6 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         )
 
     def _batch_norm(self, node: fx.Node) -> relax.Var:
-        # print("PRINTING BATCH NORM")
-        # print("type(node): ",type(node))
-        # print("node: ",node)
-        # print("type(node.args): ",type(node.args))
-        # print("node.args: ",node.args)
-        # print("type(node.args[0]): ",type(node.args[0]))
-        # print("node.args[0]: ",node.args[0])
-        # print("DONE PRINTING BATCH NORM")
-
         x = self.env[node.args[0]] 
         gamma = self.env[node.args[1]] 
         beta = self.env[node.args[2]]
@@ -414,8 +404,6 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             with self.block_builder.dataflow():
                 # Translate the model.
                 for node in nodes:
-                    # print("the node has type: ",type(node))
-                    # print(node)
                     if node.op == "placeholder":
                         if "grapharg" in node.meta and node.meta["grapharg"].fake_tensor is None:
                             # Ignore sym input
@@ -439,11 +427,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
                     elif node.op == "get_attr":
                         self.env[node] = getattr(exported_program.graph_module, node.target)
                     elif node.op == "call_function":
-                        assert len(node.kwargs) == 0, f"{node.name} has non-empty kwargs!"
-                        assert len(list(node.kwargs.keys())) == 0, f"{node.name} has non-empty kwargs!"
-                        assert not node.kwargs, f"{node.name} has non-empty kwargs!"
                         func_name = node.target.__name__
-                        # print("Found a func_name of ",func_name)
                         assert (
                             func_name in self.convert_map
                         ), f"Unsupported function type {func_name}"
