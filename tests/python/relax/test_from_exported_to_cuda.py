@@ -22,7 +22,11 @@ import numpy as np
 import torch
 from torch.export import export
 from tvm.relax.frontend.torch import from_exported_program
+<<<<<<< HEAD
 from torch.nn import Softmax
+=======
+from torch.nn import Softmax, Upsample
+>>>>>>> ingest_exported_upsample
 
 
 def assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module):
@@ -67,6 +71,45 @@ def test_softmax_non_last_dim_large_tensor():
     """
     torch_module = Softmax(dim=2).eval()
     raw_data = np.random.rand(10, 4, 32, 16384).astype("float32")
+
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module)
+
+
+def test_upsample_with_size():
+    """ 
+    The Upsample module can be used with the size arugment or the scale 
+    factor argument but not both. This tests the former.
+    """
+    batch_size = 1
+    channels = 3
+    height, width = 8, 8
+
+    torch_module = Upsample(
+    size=(64, 64),               
+    mode='nearest',             
+    recompute_scale_factor=None)
+
+    raw_data = np.random.rand(
+        batch_size, channels, height, width).astype("float32")
+
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module)
+
+
+def test_upsample_with_scale_factor():
+    """
+    The Upsample module can be used with the size arugment or the scale 
+    factor argument but not both. This tests the latter. 
+    """
+    batch_size = 2  
+    channels = 3
+    height, width = 32, 32
+
+    torch_module = Upsample(size=None, scale_factor = 7, mode = 'nearest',
+                            align_corners=None, recompute_scale_factor=True)
+
+    raw_data = np.random.rand(
+        batch_size, channels, height, width).astype("float32")
+
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module)
 
 
