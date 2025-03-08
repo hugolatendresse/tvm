@@ -397,6 +397,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             with self.block_builder.dataflow():
                 # Translate the model.
                 for node in nodes:
+                    # print("the node has type: ",type(node))
                     # print(node)
                     if node.op == "placeholder":
                         if "grapharg" in node.meta and node.meta["grapharg"].fake_tensor is None:
