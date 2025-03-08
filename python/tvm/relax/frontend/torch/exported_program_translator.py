@@ -171,21 +171,11 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         if size:
             scale_factor = None # Can only define size or scale_factor, not both
             align_corners = node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", None) 
-            if len(node.args) > 3:
-                # TODO what is the TVM way to give a warning? 
-                import warnings
-                warnings.warn("Unexpected argument in _upsample_nearest2d."
-                " Perhaps the user tried to use recompute_scale_factors?", UserWarning)
                 
         else:
             # TODO figure out why pytorch passes a list [scale_factor,scale_factor] instead of just an int. Passing first element for now
             scale_factor = node.args[2][0] if len(node.args) > 2 else node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
             align_corners = node.args[3] if len(node.args) > 3 else node.kwargs.get("align_corners", None) # TODO pytorch defaults to None
-            if len(node.args) > 4:
-                # TODO what is the TVM way to give a warning? 
-                import warnings
-                warnings.warn("Unexpected argument in _upsample_nearest2d."
-                " Perhaps the user tried to use recompute_scale_factors?", UserWarning)
           
         return self._upsample_impl(x, size=size, scale_factor=scale_factor, 
                                    method="nearest_neighbor", 
