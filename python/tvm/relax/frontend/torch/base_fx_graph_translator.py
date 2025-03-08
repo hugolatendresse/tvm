@@ -966,8 +966,8 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         chunks = node.args[1]
         dim = node.args[2] if len(node.args) > 2 else node.kwargs.get("dim", 0)
         length_dim = int(self.shape_of(x)[dim])
-        print("length_dim is",length_dim)
-        print("length_dim has type ",type(length_dim))
+        # print("length_dim is",length_dim)
+        # print("length_dim has type ",type(length_dim))
         n_section = math.ceil(length_dim / chunks) 
         return self.block_builder.emit(relax.op.split(x, n_section, dim))
 
