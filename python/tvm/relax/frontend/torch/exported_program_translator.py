@@ -77,6 +77,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         gamma = self.env[node.args[2]] if len(node.args) > 2 else None
         beta = self.env[node.args[3]] if len(node.args) > 3 else None
         eps = node.args[4] if len(node.args) > 4 else 1e-05
+        print(f"group norm has x: {x}, num_groups: {num_groups}, gamma: {gamma}, beta: {beta}, eps: {eps}")
 
         dim = len(self.shape_of(x))
         return self.block_builder.emit(
@@ -163,7 +164,18 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         align_corners = (
             node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", True)
         )
-        scale_factor = node.args[3] if len(node.args) > 3 else node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
+        if len(node.args) > 3:
+            print("AAAAAAAAAAAAAAAA")
+            scale_factor = node.args[3] 
+        else:
+            print("BBBBBBBBBBBBBBBB")
+            print("the kwargs are: ",list(node.kwargs.keys()))
+            scale_factor = node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
+
+        print("size: ",size)
+        print("align_corners: ",align_corners)
+        print("scale_factor: ",scale_factor)
+        scale_factor = 2
         return self._upsample_impl(x, size, align_corners, scale_factor, "nearest_neighbor")
 
     ########## Manipulation ##########
@@ -422,7 +434,11 @@ class ExportedProgramImporter(BaseFXGraphImporter):
                     elif node.op == "get_attr":
                         self.env[node] = getattr(exported_program.graph_module, node.target)
                     elif node.op == "call_function":
+                        assert len(node.kwargs) == 0, f"{node.name} has non-empty kwargs!"
+                        assert len(list(node.kwargs.keys())) == 0, f"{node.name} has non-empty kwargs!"
+                        assert not node.kwargs, f"{node.name} has non-empty kwargs!"
                         func_name = node.target.__name__
+                        print("Found a func_name of ",func_name)
                         assert (
                             func_name in self.convert_map
                         ), f"Unsupported function type {func_name}"

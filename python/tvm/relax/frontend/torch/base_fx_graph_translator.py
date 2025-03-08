@@ -264,6 +264,9 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         dimension to the end, apply softmax, then transpose back to the original shape.
         """
         print("ENTERING _softmax() in base_fx_graph_importer.py")
+        print("the kwargs type is",type(node.kwargs))
+        print("the raw kwargs are: ",node.kwargs)
+        print("the kwargs are: ",list(node.kwargs.keys()))
         x = self.env[node.args[0]]
         dim = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim", -1)
         
@@ -708,6 +711,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         bias = args[2] if len(args) > 2 else None
         stride = args[3] if len(args) > 3 else 1
         padding = args[4] if len(args) > 4 else 0
+        print(f"got a stride of {stride} and a padding of {padding}")
         dilation = args[5] if len(args) > 5 else 1
         groups = args[6] if len(args) > 6 else 1
         return self._conv2d_impl(
