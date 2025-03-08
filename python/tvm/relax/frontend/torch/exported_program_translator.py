@@ -152,6 +152,8 @@ class ExportedProgramImporter(BaseFXGraphImporter):
     def _upsample_bilinear2d(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
         size = node.args[1] if len(node.args) > 1 else node.kwargs.get("size", None)
+        # TODO do we need the condition on size like we have in _upsample_nearest2d?
+
         # TODO HL: I am doubtful that align_corners is args[2]. The pytorch 
         # arguments go size, scale_factor, mode, align_corner. See changes I 
         # made to _upsample_nearest2d. Need to test for _upsample_bilinear2d
@@ -164,18 +166,27 @@ class ExportedProgramImporter(BaseFXGraphImporter):
 
     def _upsample_nearest2d(self, node: fx.node) -> relax.Var:
         x = self.env[node.args[0]]
-        print("1", node.args[1])
-        print("2", node.args[2])
-        # print("3",node.args[3])
-        # print("4",node.args[4])
-        # print("5", node.args[5])
         size = node.args[1] if len(node.args) > 1 else node.kwargs.get("size", None)
-        scale_factor = node.args[2] if len(node.args) > 2 else node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
-        align_corners = node.args[3] if len(node.args) > 3 else node.kwargs.get("align_corners", True) # TODO pytorch defaults to None
-        # TODO what happened to recompute_scale_factors argument torch has?
-        size=None
-        scale_factor = 4
-        align_corners=None
+
+        if size:
+            scale_factor = None # Can only define size or scale_factor, not both
+            align_corners = node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", None) 
+            if len(node.args) > 3:
+                # TODO what is the TVM way to give a warning? 
+                import warnings
+                warnings.warn("Unexpected argument in _upsample_nearest2d."
+                " Perhaps the user tried to use recompute_scale_factors?", UserWarning)
+                
+        else:
+            # TODO figure out why pytorch passes a list [scale_factor,scale_factor] instead of just an int. Passing first element for now
+            scale_factor = node.args[2][0] if len(node.args) > 2 else node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
+            align_corners = node.args[3] if len(node.args) > 3 else node.kwargs.get("align_corners", None) # TODO pytorch defaults to None
+            if len(node.args) > 4:
+                # TODO what is the TVM way to give a warning? 
+                import warnings
+                warnings.warn("Unexpected argument in _upsample_nearest2d."
+                " Perhaps the user tried to use recompute_scale_factors?", UserWarning)
+          
         return self._upsample_impl(x, size=size, scale_factor=scale_factor, 
                                    method="nearest_neighbor", 
                                    align_corners=align_corners)
