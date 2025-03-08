@@ -19,6 +19,7 @@
 # pylint: disable=import-outside-toplevel
 """Base class for PyTorch FX Graph importer."""
 import abc
+import math
 from typing import Callable, Dict, Optional, Tuple, Union
 
 from tvm import relax
@@ -172,7 +173,6 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
     def _clamp_min(self, node: fx.Node) -> relax.Expr:
         args = self.retrieve_args(node)
         a_min = args[1] if len(args) > 1 else node.kwargs["min"]
-        import math
         a_max = math.inf
         if not isinstance(a_min, (int, float)):
             raise ValueError(
@@ -964,10 +964,12 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
     def _chunk(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]  
         chunks = node.args[1]
-       # TODO below might just pass none if node.args <= 2 ?
         dim = node.args[2] if len(node.args) > 2 else node.kwargs.get("dim", 0)
-        name = node.args[3] if len(node.args) > 3 else node.kwargs.get("name", None)
-        return self.block_builder.emit(relax.op.chunk(x, chunks, dim, name))
+        length_dim = int(self.shape_of(x)[dim])
+        print("length_dim is",length_dim)
+        print("length_dim has type ",type(length_dim))
+        n_section = math.ceil(length_dim / chunks) # TODO try normal division??
+        return self.block_builder.emit(relax.op.split(x, n_section, dim))
 
     def _cumsum(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
