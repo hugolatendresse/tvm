@@ -99,8 +99,6 @@ class TensorRTTrackerFactory(object):
                     The processed context.
                 """
 
-                print("INSIDE QUANTIZER.PY - Tracker() - _execute_after_forward !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-
                 for name, data in step_context["datas"].items():
                     if name not in self._track_tensors:
                         continue
