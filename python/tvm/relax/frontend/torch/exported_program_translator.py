@@ -128,7 +128,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         )
 
     def _upsample_impl(
-        self, x: relax.Expr, size, align_corners: bool, scale_factor, method: str
+        self, x: relax.Expr, size, scale_factor, method: str, align_corners: bool,  
     ) -> relax.Var:
         coord_trans = "align_corners" if align_corners else "half_pixel"
 
@@ -152,31 +152,33 @@ class ExportedProgramImporter(BaseFXGraphImporter):
     def _upsample_bilinear2d(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
         size = node.args[1] if len(node.args) > 1 else node.kwargs.get("size", None)
+        # TODO HL: I am doubtful that align_corners is args[2]. The pytorch 
+        # arguments go size, scale_factor, mode, align_corner. See changes I 
+        # made to _upsample_nearest2d. Need to test for _upsample_bilinear2d
         align_corners = (
             node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", True)
         )
         scale_factor = node.args[3] if len(node.args) > 3 else node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
-        return self._upsample_impl(x, size, align_corners, scale_factor, "linear")
+        return self._upsample_impl(x, size=size, scale_factor=scale_factor, 
+                                   method="linear", align_corners=align_corners)
 
     def _upsample_nearest2d(self, node: fx.node) -> relax.Var:
         x = self.env[node.args[0]]
+        print("1", node.args[1])
+        print("2", node.args[2])
+        # print("3",node.args[3])
+        # print("4",node.args[4])
+        # print("5", node.args[5])
         size = node.args[1] if len(node.args) > 1 else node.kwargs.get("size", None)
-        align_corners = (
-            node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", True)
-        )
-        if len(node.args) > 3:
-            print("AAAAAAAAAAAAAAAA")
-            scale_factor = node.args[3] 
-        else:
-            print("BBBBBBBBBBBBBBBB")
-            print("the kwargs are: ",list(node.kwargs.keys()))
-            scale_factor = node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
-
-        print("size: ",size)
-        print("align_corners: ",align_corners)
-        print("scale_factor: ",scale_factor)
-        scale_factor = 2
-        return self._upsample_impl(x, size, align_corners, scale_factor, "nearest_neighbor")
+        scale_factor = node.args[2] if len(node.args) > 2 else node.kwargs.get("scale_factor", 1) # TODO non-sense to default to 1! Understand why "None" doesn't work!
+        align_corners = node.args[3] if len(node.args) > 3 else node.kwargs.get("align_corners", True) # TODO pytorch defaults to None
+        # TODO what happened to recompute_scale_factors argument torch has?
+        size=None
+        scale_factor = 4
+        align_corners=None
+        return self._upsample_impl(x, size=size, scale_factor=scale_factor, 
+                                   method="nearest_neighbor", 
+                                   align_corners=align_corners)
 
     ########## Manipulation ##########
 
