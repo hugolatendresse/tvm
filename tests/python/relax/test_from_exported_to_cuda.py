@@ -3,11 +3,7 @@
 # distributed with this work for additional information
 # regarding copyright ownership.  The ASF licenses this file
 # to you under the Apache License, Version 2.0 (the
-<<<<<<< HEAD
-# "License"); you may not use this file except in compliance
-=======
 # "License"); you may not use this file except in compliance    
->>>>>>> detach
 # with the License.  You may obtain a copy of the License at
 #
 #   http://www.apache.org/licenses/LICENSE-2.0
@@ -19,21 +15,15 @@
 # specific language governing permissions and limitations
 # under the License.
 
-<<<<<<< HEAD
-=======
 import sys
 sys.path.append('/ssd1/htalendr/tvm/python') # Refer to local TVM build
 
->>>>>>> detach
 import tvm
 from tvm import relax
 import tvm.testing
 import numpy as np
 import torch
-<<<<<<< HEAD
-=======
 from torch import nn
->>>>>>> detach
 from torch.export import export
 from tvm.relax.frontend.torch import from_exported_program
 from torch.nn import Softmax, Upsample
@@ -148,12 +138,52 @@ def test_linalg_vector_norm():
     torch_module1 = VectorNorm1().eval()            
     torch_module2 = VectorNorm2().eval()
     torch_module3 = VectorNorm3().eval()
+    
+def test_tensor_expand_as():
+    
+    class ExpandAs0(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.template = torch.ones((1, 1, 1, 1))
+            
+        def forward(self, x):
+            return self.template.expand_as(x)
+
+    class ExpandAs1(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.template = torch.ones((2, 1, 4, 1))
+            
+        def forward(self, x):
+            return self.template.expand_as(x)
+        
+    class ExpandAs2(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.template = torch.ones((2, 1, 1, 10))
+            
+        def forward(self, x):
+            return self.template.expand_as(x)
+        
+    class ExpandAs3(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.template = torch.ones((2, 3, 1, 1))
+            
+        def forward(self, x):
+            return self.template.expand_as(x)
+        
+    raw_data = np.random.randn(2, 3, 4, 10).astype(np.float32)
+
+    torch_module0 = ExpandAs0().eval()
+    torch_module1 = ExpandAs1().eval()            
+    torch_module2 = ExpandAs2().eval()
+    torch_module3 = ExpandAs3().eval()
 
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module0)
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module1)
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module2)
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module3)
-
 
 def test_copy_():
     class CopyTester(nn.Module):
