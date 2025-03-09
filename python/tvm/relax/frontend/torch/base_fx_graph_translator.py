@@ -19,6 +19,7 @@
 # pylint: disable=import-outside-toplevel
 """Base class for PyTorch FX Graph importer."""
 import abc
+import math
 from typing import Callable, Dict, Optional, Tuple, Union
 
 from tvm import relax
@@ -155,6 +156,23 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
             )
         return self.block_builder.emit(relax.op.clip(args[0], a_min, a_max))
 
+
+    def _clamp_min(self, node: fx.Node) -> relax.Expr:
+        args = self.retrieve_args(node)
+        a_min = args[1] if len(args) > 1 else node.kwargs["min"]
+        a_max = math.inf
+        if not isinstance(a_min, (int, float)):
+            raise ValueError(
+                f"TVM only supports constant min value for torch.clamp/clip, "
+                f"but got {a_min} with type {type(a_min)}"
+            )
+        if not isinstance(a_max, (int, float)):
+            raise ValueError(
+                f"TVM only supports constant max value for torch.clamp/clip, "
+                f"but got {a_max} with type {type(a_max)}"
+            )
+        return self.block_builder.emit(relax.op.clip(args[0], a_min, a_max))
+
     def _elu(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
         alpha = node.args[1] if len(node.args) > 1 else node.kwargs.get("alpha", 1.0)
@@ -279,7 +297,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         else:
             # Regular softmax 
             return self.block_builder.emit(relax.op.nn.softmax(x, dim))
-        
+
     def _selu(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
         alpha = node.args[1] if len(node.args) > 1 else node.kwargs.get("alpha", 1.6732631921768188)
@@ -355,7 +373,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
 
         return convert
     
-    
+
     ########## Linear Algebra ##########
 
     def _linalg_vector_norm(self, node: fx.Node) -> relax.Var:
@@ -666,6 +684,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         bias = args[2] if len(args) > 2 else None
         stride = args[3] if len(args) > 3 else 1
         padding = args[4] if len(args) > 4 else 0
+        # print(f"got a stride of {stride} and a padding of {padding}")
         dilation = args[5] if len(args) > 5 else 1
         groups = args[6] if len(args) > 6 else 1
         return self._conv2d_impl(
@@ -915,6 +934,16 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         axis = args[1] if len(node.args) > 1 else node.kwargs.get("dim", 0)
         return self.block_builder.emit(relax.op.concat(args[0], axis=axis))
 
+    def _chunk(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]  
+        chunks = node.args[1]
+        dim = node.args[2] if len(node.args) > 2 else node.kwargs.get("dim", 0)
+        length_dim = int(self.shape_of(x)[dim])
+        # print("length_dim is",length_dim)
+        # print("length_dim has type ",type(length_dim))
+        n_section = math.ceil(length_dim / chunks) 
+        return self.block_builder.emit(relax.op.split(x, n_section, dim))
+
     def _cumsum(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
 
@@ -945,6 +974,14 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         # args[1] is the 'other' tensor
         data = args[0]
         other_shape = self.shape_of(args[1])  # the shape of 'other'
+        return self.block_builder.emit(relax.op.broadcast_to(data, other_shape))
+
+    def _expand_as(self, node: fx.Node) -> relax.Var:
+        args = self.retrieve_args(node)
+        # args[0] -> 'self' tensor
+        # args[1] -> 'other' tensor
+        data = args[0]
+        other_shape = self.shape_of(args[1])  # This is the shape of 'other'
         return self.block_builder.emit(relax.op.broadcast_to(data, other_shape))
 
     def _flip(self, node: fx.Node) -> relax.Var:
