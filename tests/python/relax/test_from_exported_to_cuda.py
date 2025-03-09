@@ -95,20 +95,20 @@ def test_detach_no_change():
 
 # TODO test below fails! Is there a way to implement detach such that the 
 #  memory is shared with the input?
-# def test_detach_with_change():
-#     """ Testing that detach() shares memory with original tensor"""
-#     class DetachTester(nn.Module):
-#         def forward(self, x):
-#             detached = x.detach()
+def test_detach_with_change():
+    """ Testing that detach() shares memory with original tensor"""
+    class DetachTester(nn.Module):
+        def forward(self, x):
+            detached = x.detach()
 
-#             # Test that detached shares same memory as x
-#             x[0][0] = 42.0 
+            # Test that detached shares same memory as x
+            x[0][0] = 42.0 
 
-#             return detached
+            return detached
 
-#     raw_data = np.ones((2,2)).astype(np.float32)
-#     torch_module = DetachTester().eval()
-#     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module)
+    raw_data = np.ones((2,2)).astype(np.float32)
+    torch_module = DetachTester().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module)
 
 
 if __name__ == "__main__":
