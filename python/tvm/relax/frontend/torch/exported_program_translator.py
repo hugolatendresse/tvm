@@ -313,6 +313,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "cat.default": self._cat,
             "chunk.default": self._chunk,
             "concat.default": self._cat,
+            "copy_.default": self._copy_,
             "cumsum.default": self._cumsum,
             "expand.default": self._expand,
             "expand_as.default": self._expand_as,
@@ -334,6 +335,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             # tensor creation
             "_to_copy.default": self._to_copy,
             "lift_fresh_copy.default": self._to_copy,
+            "detach.default": self._detach,
             "detach_.default": self._detach,
             "arange.start": self._arange,
             "contiguous.default": lambda node: self.env[node.args[0]], # TODO would be more efficient to not always do this, and only do it if not contiguous, but need to find a way to check 

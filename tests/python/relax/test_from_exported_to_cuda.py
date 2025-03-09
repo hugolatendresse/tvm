@@ -3,7 +3,11 @@
 # distributed with this work for additional information
 # regarding copyright ownership.  The ASF licenses this file
 # to you under the Apache License, Version 2.0 (the
+<<<<<<< HEAD
 # "License"); you may not use this file except in compliance
+=======
+# "License"); you may not use this file except in compliance    
+>>>>>>> detach
 # with the License.  You may obtain a copy of the License at
 #
 #   http://www.apache.org/licenses/LICENSE-2.0
@@ -15,11 +19,21 @@
 # specific language governing permissions and limitations
 # under the License.
 
+<<<<<<< HEAD
+=======
+import sys
+sys.path.append('/ssd1/htalendr/tvm/python') # Refer to local TVM build
+
+>>>>>>> detach
 import tvm
 from tvm import relax
 import tvm.testing
 import numpy as np
 import torch
+<<<<<<< HEAD
+=======
+from torch import nn
+>>>>>>> detach
 from torch.export import export
 from tvm.relax.frontend.torch import from_exported_program
 from torch.nn import Softmax, Upsample
@@ -31,6 +45,7 @@ def assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module):
     using torch.export and that the resuling IR program gives the same result 
     as PyTorch when ran on CUDA.
     """
+    raw_data_for_tvm = raw_data.copy() # In case the data is modified
     torch_data = torch.from_numpy(raw_data)
     example_args = (torch_data,)
 
@@ -48,7 +63,7 @@ def assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module):
     dev = tvm.device("cuda", 0)
     vm = relax.VirtualMachine(ex, dev)
 
-    gpu_data = tvm.nd.array(raw_data, dev)
+    gpu_data = tvm.nd.array(raw_data_for_tvm, dev)
     gpu_params = [tvm.nd.array(p, dev) for p in tvm_params["main"]]
     gpu_out = vm["main"](gpu_data, *gpu_params)
 
@@ -138,6 +153,54 @@ def test_linalg_vector_norm():
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module1)
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module2)
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module3)
+
+
+def test_copy_():
+    class CopyTester(nn.Module):
+        def __init__(self, size):
+            super().__init__()
+            # self.buffer = torch.zeros(size)
+            self.register_buffer("buffer", torch.zeros(size))
+
+        def forward(self, x):
+            self.buffer.copy_(x)
+            
+            return x * 3 + self.buffer * 5
+
+    size = (2,2)
+    raw_data = np.random.rand(*size).astype(np.float32)
+    torch_module = CopyTester(size).eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module)
+
+
+def test_detach_no_change():
+    """ Most of the time, in TVM, detach() should basically be identity"""
+    class DetachTester(nn.Module):
+        def forward(self, x):
+            detached = x.detach()
+            return detached
+
+    raw_data = np.ones((2,2)).astype(np.float32)
+    torch_module = DetachTester().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module)
+
+
+# TODO test below fails! Is there a way to implement detach such that the 
+#  memory is shared with the input?
+# def test_detach_with_change():
+#     """ Testing that detach() shares memory with original tensor"""
+#     class DetachTester(nn.Module):
+#         def forward(self, x):
+#             detached = x.detach()
+
+#             # Test that detached shares same memory as x
+#             x[0][0] = 42.0 
+
+#             return detached
+
+#     raw_data = np.ones((2,2)).astype(np.float32)
+#     torch_module = DetachTester().eval()
+#     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module)
 
 
 if __name__ == "__main__":

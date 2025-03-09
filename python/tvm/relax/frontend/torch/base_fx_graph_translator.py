@@ -1088,18 +1088,15 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
     ########## Creation ##########
 
     def _detach(self, node: fx.Node) -> relax.Var:
-        x = self.env[node.args[0]]
-        # if len(node.args) == 2:
-        #     if isinstance(node.args[1], torch.dtype):
-        #         dtype = self._convert_data_type(node.args[1], self.env)
-        #         return self.block_builder.emit(relax.op.astype(x, dtype))
-        # elif "dtype" in node.kwargs:
-        #     dtype = self._convert_data_type(node.kwargs["dtype"], self.env)
-        #     return self.block_builder.emit(relax.op.astype(x, dtype))
-        return x
+        return self.env[node.args[0]]
 
+    def _copy_(self, node: fx.Node) -> relax.Var:
+        # Copies the source tensor's to the destination tensor
+        # In TVM, that means simply returning the source tensor
+        return self.env[node.args[1]]
 
     def _to_copy(self, node: fx.Node) -> relax.Var:
+        # Returns a copy of the input tensor
         import torch  # type: ignore
 
         x = self.env[node.args[0]]
