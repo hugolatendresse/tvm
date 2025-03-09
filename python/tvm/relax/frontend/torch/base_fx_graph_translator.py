@@ -328,7 +328,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         else:
             # Regular softmax 
             return self.block_builder.emit(relax.op.nn.softmax(x, dim))
-        
+
     def _selu(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
         alpha = node.args[1] if len(node.args) > 1 else node.kwargs.get("alpha", 1.6732631921768188)
@@ -404,7 +404,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
 
         return convert
     
-    
+
     ########## Linear Algebra ##########
 
     def _linalg_vector_norm(self, node: fx.Node) -> relax.Var:
@@ -715,6 +715,7 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         bias = args[2] if len(args) > 2 else None
         stride = args[3] if len(args) > 3 else 1
         padding = args[4] if len(args) > 4 else 0
+        # print(f"got a stride of {stride} and a padding of {padding}")
         dilation = args[5] if len(args) > 5 else 1
         groups = args[6] if len(args) > 6 else 1
         return self._conv2d_impl(
@@ -963,6 +964,16 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         args = self.retrieve_args(node)
         axis = args[1] if len(node.args) > 1 else node.kwargs.get("dim", 0)
         return self.block_builder.emit(relax.op.concat(args[0], axis=axis))
+
+    def _chunk(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]  
+        chunks = node.args[1]
+        dim = node.args[2] if len(node.args) > 2 else node.kwargs.get("dim", 0)
+        length_dim = int(self.shape_of(x)[dim])
+        # print("length_dim is",length_dim)
+        # print("length_dim has type ",type(length_dim))
+        n_section = math.ceil(length_dim / chunks) 
+        return self.block_builder.emit(relax.op.split(x, n_section, dim))
 
     def _cumsum(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
