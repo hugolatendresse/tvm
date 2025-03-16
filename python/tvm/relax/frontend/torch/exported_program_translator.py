@@ -57,17 +57,21 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         running_var = self.env.get(node.args[4], relax.const(np.ones(channel), dtype=dtype))
         momentum = node.args[5] if len(node.args) > 5 else node.kwargs.get("momentum", 0.1)
         eps = node.args[6] if len(node.args) > 6 else node.kwargs.get("eps", 1e-05)
+        training = False # This method is only called for eval mode
 
         return self.block_builder.emit(
             relax.op.nn.batch_norm(
-                x,
-                weight,
-                bias,
-                running_mean,
-                running_var,
-                axis=1,
+                data=x,
+                gamma=weight,
+                beta=bias,
+                moving_mean=running_mean,
+                moving_var=running_var,
+                axis=1, # Always over channel
                 epsilon=eps,
+                center=False, # TODO
+                scale=False, # TODO 
                 momentum=momentum,
+                training=training,
             )
         )
 
@@ -283,7 +287,10 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             # linear algebra
             "linalg_vector_norm.default": self._linalg_vector_norm,
             # neural network
+            # TODO figure out all calls to batchnorm HERE and in fx_translator 
             "_native_batch_norm_legit_no_training.default": self._batch_norm_legit_no_training,
+            "batch_norm.default": self._batch_norm_legit_no_training, # TODO keep or not? 
+            "_native_batch_norm_legit_functional.default": self._batch_norm_legit_no_training, # when I don't do eval . TODO doesn't work right now!
             "adaptive_avg_pool2d.default": self._adaptive_avg_pool2d,
             "addmm.default": self._addmm,
             "avg_pool2d.default": self._avg_pool2d,
@@ -318,6 +325,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "cat.default": self._cat,
             "clamp.Tensor": self._clamp,
             "concat.default": self._cat,
+            "copy.default": self._copy_,
             "copy_.default": self._copy_,
             "cumsum.default": self._cumsum,
             "expand.default": self._expand,
@@ -340,6 +348,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "view.default": self._reshape,
             "reshape.default": self._reshape,
             # tensor creation
+            "copy.default": self._copy,
             "_to_copy.default": self._to_copy,
             "lift_fresh_copy.default": self._to_copy,
             "detach.default": self._detach,
@@ -442,6 +451,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
                         assert (
                             func_name in self.convert_map
                         ), f"Unsupported function type {func_name}"
+                        print("Found a function called", func_name)
                         self.env[node] = self.convert_map[func_name](node)
                     else:
                         raise ValueError(f"Unsupported op {node.op}")
