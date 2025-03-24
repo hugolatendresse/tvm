@@ -91,6 +91,32 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             )
         )
 
+    def _batch_norm(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]] 
+        gamma = self.env[node.args[1]] 
+        beta = self.env[node.args[2]]
+        moving_mean = self.env[node.args[3]]
+        moving_var = self.env[node.args[4]]
+        center = node.args[5] if len(node.args) > 5 else None # TODO copilot suggests node.kwargs.get("center", True)]
+        momentum = node.args[6] if len(node.args) > 6 else None # TODO copilot says node.kwargs.get("momentum", 0.1)
+        eps = node.args[7] if len(node.args) > 4 else 1e-05
+        scale = node.args[8] if len(node.args) > 8 else None 
+        
+        return self.block_builder.emit( # adds the line of relax function into the ir function  (and produces left hand side) 
+            relax.op.nn.batch_norm(# creates RHS of a line in a relax fonction (starts with R.Tensor... or R.call_tir...)
+                data=x, 
+                gamma=gamma,
+                beta=beta, 
+                moving_mean=moving_mean,
+                moving_var=moving_var,
+                axis = 1, # TODO ?????
+                epsilon=eps,
+                center=center,
+                scale=scale,
+                momentum=momentum
+            )[0] # ruihang prefers
+        )
+
     def _upsample_impl(
         self,
         x: relax.Expr,
@@ -121,6 +147,11 @@ class ExportedProgramImporter(BaseFXGraphImporter):
     def _upsample_bilinear2d(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
         size = node.args[1] if len(node.args) > 1 else node.kwargs.get("size", None)
+        # TODO do we need the condition on size like we have in _upsample_nearest2d?
+
+        # TODO HL: I am doubtful that align_corners is args[2]. The pytorch 
+        # arguments go size, scale_factor, mode, align_corner. See changes I 
+        # made to _upsample_nearest2d. Need to test for _upsample_bilinear2d
         align_corners = (
             node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", True)
         )
@@ -316,6 +347,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
                 self.env[node.args[1]], self.env[node.args[0]]
             ),
             "group_norm.default": self._group_norm,
+            "batch_norm.default": self._batch_norm,
             "layer_norm.default": self._layer_norm,
             "linear.default": self._linear,
             "max_pool2d.default": self._max_pool2d,
@@ -331,6 +363,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "argmin.default": self._argmax_argmin(relax.op.argmin),
             # tensor manipulation
             "cat.default": self._cat,
+            "chunk.default": self._chunk,
             "clamp.Tensor": self._clamp,
             "concat.default": self._cat,
             "copy_.default": self._copy_,
