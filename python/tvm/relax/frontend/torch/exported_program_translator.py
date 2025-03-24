@@ -92,7 +92,12 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         )
 
     def _upsample_impl(
-        self, x: relax.Expr, size, scale_factor, method: str, align_corners: bool,  
+        self,
+        x: relax.Expr,
+        size,
+        scale_factor,
+        method: str,
+        align_corners: bool,
     ) -> relax.Var:
         coord_trans = "align_corners" if align_corners else "half_pixel"
 
@@ -120,12 +125,38 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", True)
         )
         scale_factor = node.args[3] if len(node.args) > 3 else node.kwargs.get("scale_factor", 1)
-        return self._upsample_impl(x, size=size, scale_factor=scale_factor, 
-                                   method="linear", align_corners=align_corners)
+        return self._upsample_impl(
+            x, size=size, scale_factor=scale_factor, method="linear", align_corners=align_corners
+        )
 
     def _upsample_nearest2d(self, node: fx.node) -> relax.Var:
         x = self.env[node.args[0]]
         size = node.args[1] if len(node.args) > 1 else node.kwargs.get("size", None)
+
+        if size:
+            scale_factor = None  # Can only define size or scale_factor, not both
+            align_corners = (
+                node.args[2] if len(node.args) > 2 else node.kwargs.get("align_corners", None)
+            )
+
+        else:
+            # TODO figure out why pytorch export passes a list such as
+            # [scale_factor,scale_factor] instead of just an int for
+            # scale_factor. Using first element for now
+            scale_factor = (
+                node.args[2][0] if len(node.args) > 2 else node.kwargs.get("scale_factor", 1)
+            )
+            align_corners = (
+                node.args[3] if len(node.args) > 3 else node.kwargs.get("align_corners", None)
+            )
+
+        return self._upsample_impl(
+            x,
+            size=size,
+            scale_factor=scale_factor,
+            method="nearest_neighbor",
+            align_corners=align_corners,
+        )
 
         if size:
             scale_factor = None # Can only define size or scale_factor, not both
@@ -158,6 +189,23 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         stride = [node.args[4] if len(node.args) > 4 else 1]
         return self.block_builder.emit(relax.op.strided_slice(x, axes, begin, end, stride))
 
+    ########## Creation ##########
+
+    def _one_hot(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        num_classes = node.args[1] if len(node.args) > 1 else node.kwargs.get("num_classes")
+        if num_classes is None:
+            raise ValueError("num_classes not found in node.args or node.kwargs")
+
+        on_value = node.args[2] if len(node.args) > 2 else node.kwargs.get("on_value", 1)
+        off_value = node.args[3] if len(node.args) > 3 else node.kwargs.get("off_value", 0)
+        axis = node.args[4] if len(node.args) > 4 else node.kwargs.get("axis", -1)
+
+        on_value = relax.PrimValue(on_value)
+        off_value = relax.PrimValue(off_value)
+
+        return self.block_builder.emit(relax.op.one_hot(x, on_value, off_value, num_classes, axis))
+
     ########## Others ##########
 
     def create_convert_map(
@@ -176,12 +224,14 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "atanh.default": self._unary_op(relax.op.atanh),
             "bitwise_not.default": self._unary_op(relax.op.bitwise_not),
             "ceil.default": self._unary_op(relax.op.ceil),
+            "celu.default": self._celu,
             "clamp.default": self._clamp,
             "clamp_min.default": self._clamp_min,
             "clamp_max.default": self._clamp_max,
             "cos.default": self._unary_op(relax.op.cos),
             "cosh.default": self._unary_op(relax.op.cosh),
             "dropout.default": lambda node: self.env[node.args[0]],
+            "elu.default": self._elu,
             "erf.default": self._unary_op(relax.op.erf),
             "exp.default": self._unary_op(relax.op.exp),
             "floor.default": self._unary_op(relax.op.floor),
@@ -199,6 +249,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "relu.default": self._unary_op(relax.op.nn.relu),
             "round.default": self._round,
             "rsqrt.default": self._unary_op(relax.op.rsqrt),
+            "selu.default": self._selu,
             "sigmoid.default": self._unary_op(relax.op.sigmoid),
             "sign.default": self._unary_op(relax.op.sign),
             "silu.default": self._unary_op(relax.op.nn.silu),
@@ -286,6 +337,8 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "cumsum.default": self._cumsum,
             "expand.default": self._expand,
             "expand_as.default": self._expand_as,
+            "flip.default": self._flip,
+            "gather.default": self._gather,
             "permute.default": self._permute,
             "repeat.default": self._repeat,
             "select.int": self._select,
@@ -293,6 +346,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "split.Tensor": self._split,
             "squeeze.default": self._squeeze,
             "squeeze.dim": self._squeeze,
+            "take.default": self._take,
             "tile.default": self._tile,
             "transpose.int": self._transpose,
             "unsqueeze.default": lambda node: self.block_builder.emit(
@@ -306,10 +360,13 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "detach.default": self._detach,
             "detach_.default": self._detach,
             "arange.start": self._arange,
+            "contiguous.default": lambda node: self.env[node.args[0]],  # no-op
             "clone.default": lambda node: self.env[node.args[0]],
             "empty.memory_format": self._empty,
+            "empty_like.default": self._empty_like,
             "fill.Scalar": self._fill,
             "new_ones.default": self._new_ones,
+            "one_hot.default": self._one_hot,
             # other
             "getitem": self._getitem,
         }
