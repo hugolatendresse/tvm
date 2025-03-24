@@ -374,7 +374,6 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "gather.default": self._gather,
             "permute.default": self._permute,
             "repeat.default": self._repeat,
-            "reshape.default": self._reshape,
             "select.int": self._select,
             "slice.Tensor": self._slice,
             "split.Tensor": self._split,
