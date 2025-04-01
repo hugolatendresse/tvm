@@ -371,6 +371,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "expand_as.default": self._expand_as,
             "flip.default": self._flip,
             "gather.default": self._gather,
+            "index.Tensor": self._index_tensor,
             "permute.default": self._permute,
             "repeat.default": self._repeat,
             "select.int": self._select,
@@ -493,6 +494,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
                         assert (
                             func_name in self.convert_map
                         ), f"Unsupported function type {func_name}"
+                        print("found function", func_name, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
                         self.env[node] = self.convert_map[func_name](node)
                     else:
                         raise ValueError(f"Unsupported op {node.op}")
