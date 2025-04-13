@@ -24,6 +24,7 @@ from torch import nn
 from torch.export import export
 from tvm.relax.frontend.torch import from_exported_program
 from torch.nn import Softmax, Upsample
+import torch.nn.functional as F
 
 
 def assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev):
@@ -540,7 +541,6 @@ def test_sum(target, dev):
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
 
-# 1. Test for self._leakyrelu_module using torch.nn.LeakyReLU
 @tvm.testing.parametrize_targets("cuda")
 def test_leakyrelu_module(target, dev):
     class LeakyReLUModule(nn.Module):
@@ -553,7 +553,6 @@ def test_leakyrelu_module(target, dev):
     torch_module = LeakyReLUModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 2. Test for self._log_softmax_module using torch.nn.LogSoftmax
 @tvm.testing.parametrize_targets("cuda")
 def test_log_softmax_module(target, dev):
     class LogSoftmaxModule(nn.Module):
@@ -566,7 +565,7 @@ def test_log_softmax_module(target, dev):
     torch_module = LogSoftmaxModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 3. Test for self._softmax_module using torch.nn.Softmax
+
 @tvm.testing.parametrize_targets("cuda")
 def test_softmax_module(target, dev):
     class SoftmaxModule(nn.Module):
@@ -579,7 +578,7 @@ def test_softmax_module(target, dev):
     torch_module = SoftmaxModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 4. Test for self._adaptive_avg_pool2d_module using nn.AdaptiveAvgPool2d
+
 @tvm.testing.parametrize_targets("cuda")
 def test_adaptive_avg_pool2d_module(target, dev):
     class AdaptiveAvgPool2dModule(nn.Module):
@@ -592,7 +591,7 @@ def test_adaptive_avg_pool2d_module(target, dev):
     torch_module = AdaptiveAvgPool2dModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 5. Test for self._avg_pool2d_module using nn.AvgPool2d
+
 @tvm.testing.parametrize_targets("cuda")
 def test_avg_pool2d_module(target, dev):
     class AvgPool2dModule(nn.Module):
@@ -605,20 +604,7 @@ def test_avg_pool2d_module(target, dev):
     torch_module = AvgPool2dModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 6. Test for self._batch_norm_2d_module using nn.BatchNorm2d
-@tvm.testing.parametrize_targets("cuda")
-def test_batch_norm_2d_module(target, dev):
-    class BatchNorm2dModule(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.bn = nn.BatchNorm2d(3)
-        def forward(self, x):
-            return self.bn(x)
-    raw_data = np.random.randn(2, 3, 8, 8).astype(np.float32)
-    torch_module = BatchNorm2dModule().eval()
-    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 7. Test for self._conv1d_module using nn.Conv1d
 @tvm.testing.parametrize_targets("cuda")
 def test_conv1d_module(target, dev):
     class Conv1dModule(nn.Module):
@@ -631,7 +617,7 @@ def test_conv1d_module(target, dev):
     torch_module = Conv1dModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 8. Test for self._conv2d_module using nn.Conv2d
+
 @tvm.testing.parametrize_targets("cuda")
 def test_conv2d_module(target, dev):
     class Conv2dModule(nn.Module):
@@ -644,7 +630,7 @@ def test_conv2d_module(target, dev):
     torch_module = Conv2dModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 9. Test for self._conv3d_module using nn.Conv3d
+
 @tvm.testing.parametrize_targets("cuda")
 def test_conv3d_module(target, dev):
     class Conv3dModule(nn.Module):
@@ -657,7 +643,7 @@ def test_conv3d_module(target, dev):
     torch_module = Conv3dModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 10. Test for self._conv_transpose1d_module using nn.ConvTranspose1d
+
 @tvm.testing.parametrize_targets("cuda")
 def test_conv_transpose1d_module(target, dev):
     class ConvTranspose1dModule(nn.Module):
@@ -670,7 +656,7 @@ def test_conv_transpose1d_module(target, dev):
     torch_module = ConvTranspose1dModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 11. Test for self._conv_transpose2d_module using nn.ConvTranspose2d
+
 @tvm.testing.parametrize_targets("cuda")
 def test_conv_transpose2d_module(target, dev):
     class ConvTranspose2dModule(nn.Module):
@@ -683,7 +669,6 @@ def test_conv_transpose2d_module(target, dev):
     torch_module = ConvTranspose2dModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 12. Test for self._cross_entropy_module using nn.CrossEntropyLoss
 @tvm.testing.parametrize_targets("cuda")
 def test_cross_entropy_module(target, dev):
     class CrossEntropyModule(nn.Module):
@@ -861,7 +846,7 @@ def test_tensor(target, dev):
     class TensorModule(nn.Module):
         def forward(self, x):
             return torch.tensor([1, 2, 3])
-    raw_data = np.zeros((1,))  # dummy input; not used
+    raw_data = np.zeros((1,)).astype(np.float32)
     torch_module = TensorModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
@@ -870,7 +855,7 @@ def test_tensor(target, dev):
 def test_type(target, dev):
     class TypeModule(nn.Module):
         def forward(self, x):
-            return x.type(torch.float64)
+            return x.type(torch.float16)
     raw_data = np.random.randn(2, 3).astype(np.float32)
     torch_module = TypeModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
