@@ -129,6 +129,12 @@ def _remove_path(path):
 LIB_LIST, __version__ = get_lib_path()
 __version__ = git_describe_version(__version__)
 
+if not CONDA_BUILD and not INPLACE_BUILD:
+    # Wheel cleanup
+    for path in LIB_LIST:
+        libname = os.path.basename(path)
+        _remove_path(f"tvm/{libname}")
+
 
 def config_cython():
     """Try to configure cython and return cython configuration"""
@@ -206,11 +212,6 @@ if not CONDA_BUILD and not INPLACE_BUILD:
     setup_kwargs = {"include_package_data": True}
 
 
-def get_package_data_files():
-    # Relay standard libraries
-    return ["relay/std/prelude.rly", "relay/std/core.rly"]
-
-
 def long_description_contents():
     with open(pathlib.Path(CURRENT_DIR).resolve().parent / "README.md", encoding="utf-8") as readme:
         description = readme.read()
@@ -255,7 +256,6 @@ setup(
     extras_require=extras_require,
     packages=find_packages(),
     package_dir={"tvm": "tvm"},
-    package_data={"tvm": get_package_data_files()},
     distclass=BinaryDistribution,
     ext_modules=config_cython(),
     **setup_kwargs,
@@ -266,5 +266,5 @@ if not CONDA_BUILD and not INPLACE_BUILD:
     # Wheel cleanup
     os.remove("MANIFEST.in")
     for path in LIB_LIST:
-        _, libname = os.path.split(path)
+        libname = os.path.basename(path)
         _remove_path(f"tvm/{libname}")

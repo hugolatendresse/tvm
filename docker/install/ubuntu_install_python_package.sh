@@ -25,7 +25,6 @@ pip3 install --upgrade \
     "Pygments>=2.4.0" \
     cloudpickle \
     cython \
-    decorator \
     mypy \
     numpy==1.21.* \
     orderedset \
@@ -43,4 +42,4 @@ pip3 install --upgrade \
     junitparser==2.4.2 \
     six \
     tornado \
-    ml_dtypes
+    "ml_dtypes>=0.5.1"
