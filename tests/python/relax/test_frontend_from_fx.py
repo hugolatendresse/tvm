@@ -750,6 +750,43 @@ def test_einsum():
 
 
 @tvm.testing.requires_gpu
+def test_softplus():
+    import torch
+    from torch.nn import Module
+
+    torch.set_grad_enabled(False)
+
+    class Softplus0(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.softplus = torch.nn.Softplus(1.0, 20.0)
+
+        def forward(self, x):
+            return self.softplus(x)
+
+    class Softplus1(Module):
+        def forward(self, input):
+            return torch.nn.functional.softplus(input, 1.0, 20.0)
+
+    @tvm.script.ir_module
+    class expected:
+        @R.function
+        def main(inp_0: R.Tensor((10, 10), dtype="float32")) -> R.Tensor((10, 10), dtype="float32"):
+            # block 0
+            with R.dataflow():
+                lv: R.Tensor((10, 10), dtype="float32") = R.nn.softplus(
+                    inp_0, beta=1.0, threshold=20.0
+                )
+                gv: R.Tensor((10, 10), dtype="float32") = lv
+                R.output(gv)
+            return gv
+
+    input_info = [([10, 10], "float32")]
+    verify_model(Softplus0(), input_info, {}, expected)
+    verify_model(Softplus1(), input_info, {}, expected)
+
+
+@tvm.testing.requires_gpu
 def test_leakyrelu():
     import torch
     from torch.nn import Module
@@ -2225,6 +2262,9 @@ def test_extended_unary_ops():
 
     # leaky_relu
     test_leakyrelu()
+
+    # softplus
+    test_softplus()
 
     # log2
     class Log2(Module):
@@ -4428,6 +4468,178 @@ def test_topk():
             return gv
 
     verify_model(Topk(), [([5, 3], "float32")], {}, Expected)
+
+
+def test_broadcast_to():
+    class BroadcastTo(Module):
+        def forward(self, x):
+            return torch.broadcast_to(x, (5, 3))
+
+    @tvm.script.ir_module
+    class Expected:
+        @R.function
+        def main(
+            inp_0: R.Tensor((5, 1), dtype="float32"),
+        ) -> R.Tensor((5, 3), dtype="float32"):
+            with R.dataflow():
+                lv: R.Tensor((5, 3), dtype="float32") = R.broadcast_to(inp_0, (5, 3))
+                gv: R.Tensor((5, 3), dtype="float32") = lv
+                R.output(gv)
+            return gv
+
+    verify_model(BroadcastTo(), [([5, 1], "float32")], {}, Expected)
+
+
+def test_narrow():
+    class Narrow(Module):
+        def forward(self, x):
+            return torch.narrow(x, 1, 0, 2)
+
+    @tvm.script.ir_module
+    class Expected:
+        @R.function
+        def main(
+            inp_0: R.Tensor((5, 3), dtype="float32"),
+        ) -> R.Tensor((5, 2), dtype="float32"):
+            with R.dataflow():
+                lv: R.Tensor((5, 2), dtype="float32") = R.strided_slice(
+                    inp_0, axes=[1], begin=[0], end=[2]
+                )
+                gv: R.Tensor((5, 2), dtype="float32") = lv
+                R.output(gv)
+
+            return gv
+
+    verify_model(Narrow(), [([5, 3], "float32")], {}, Expected)
+
+
+def test_norm():
+
+    input_info = [([1, 3, 5, 3], "float32")]
+
+    class Norm(Module):
+        def __init__(self, p, dim=None, keepdim=False):
+            super().__init__()
+            self.p = p
+            self.dim = dim
+            self.keepdim = keepdim
+
+        def forward(self, x):
+            return torch.norm(x, p=self.p, dim=self.dim, keepdim=self.keepdim)
+
+    @tvm.script.ir_module
+    class Expected1:
+        @R.function
+        def main(
+            inp_0: R.Tensor((1, 3, 5, 3), dtype="float32"),
+        ) -> R.Tensor((), dtype="float32"):
+            with R.dataflow():
+                lv: R.Tensor((), dtype="float32") = R.max(R.abs(inp_0), axis=None, keepdims=False)
+                gv: R.Tensor((), dtype="float32") = lv
+                R.output(gv)
+            return gv
+
+    @tvm.script.ir_module
+    class Expected2:
+        @R.function
+        def main(
+            inp_0: R.Tensor((1, 3, 5, 3), dtype="float32"),
+        ) -> R.Tensor((), dtype="float32"):
+            with R.dataflow():
+                lv: R.Tensor((), dtype="float32") = R.min(R.abs(inp_0), axis=None, keepdims=False)
+                gv: R.Tensor((), dtype="float32") = lv
+                R.output(gv)
+            return gv
+
+    @tvm.script.ir_module
+    class Expected3:
+        @R.function
+        def main(
+            inp_0: R.Tensor((1, 3, 5, 3), dtype="float32"),
+        ) -> R.Tensor((), dtype="float32"):
+            with R.dataflow():
+                lv: R.Tensor((1, 3, 5, 3), dtype="float32") = R.abs(inp_0)
+                lv1: R.Tensor((1, 3, 5, 3), dtype="float32") = R.power(lv, R.const(2, "float32"))
+                lv2: R.Tensor((), dtype="float32") = R.sum(lv1, axis=None, keepdims=False)
+                lv3: R.Tensor((), dtype="float32") = R.power(lv2, R.const(0.5, "float32"))
+                gv: R.Tensor((), dtype="float32") = lv3
+                R.output(gv)
+            return gv
+
+    @tvm.script.ir_module
+    class Expected4:
+        @R.function
+        def main(
+            inp_0: R.Tensor((1, 3, 5, 3), dtype="float32"),
+        ) -> R.Tensor((), dtype="float32"):
+            with R.dataflow():
+                lv: R.Tensor((1, 3, 5, 3), dtype="float32") = R.abs(inp_0)
+                lv1: R.Tensor((1, 3, 5, 3), dtype="float32") = R.power(lv, R.const(1.0, "float32"))
+                lv2: R.Tensor((), dtype="float32") = R.sum(lv1, axis=None, keepdims=False)
+                lv3: R.Tensor((), dtype="float32") = R.power(lv2, R.const(1.0, "float32"))
+                gv: R.Tensor((), dtype="float32") = lv3
+                R.output(gv)
+            return gv
+
+    @tvm.script.ir_module
+    class Expected5:
+        @R.function
+        def main(
+            inp_0: R.Tensor((1, 3, 5, 3), dtype="float32"),
+        ) -> R.Tensor((), dtype="float32"):
+            with R.dataflow():
+                lv: R.Tensor((1, 3, 5, 3), dtype="float32") = R.abs(inp_0)
+                lv1: R.Tensor((1, 3, 5, 3), dtype="float32") = R.power(lv, R.const(-4, "float32"))
+                lv2: R.Tensor((), dtype="float32") = R.sum(lv1, axis=None, keepdims=False)
+                lv3: R.Tensor((), dtype="float32") = R.power(lv2, R.const(-0.25, "float32"))
+                gv: R.Tensor((), dtype="float32") = lv3
+                R.output(gv)
+            return gv
+
+    @tvm.script.ir_module
+    class Expected6:
+        @R.function
+        def main(
+            inp_0: R.Tensor((1, 3, 5, 3), dtype="float32"),
+        ) -> R.Tensor((), dtype="float32"):
+            with R.dataflow():
+                lv: R.Tensor((1, 3, 5, 3), dtype="float32") = R.abs(inp_0)
+                lv1: R.Tensor((1, 3, 5, 3), dtype="float32") = R.power(lv, R.const(0.5, "float32"))
+                lv2: R.Tensor((), dtype="float32") = R.sum(lv1, axis=None, keepdims=False)
+                lv3: R.Tensor((), dtype="float32") = R.power(lv2, R.const(2, "float32"))
+                gv: R.Tensor((), dtype="float32") = lv3
+                R.output(gv)
+            return gv
+
+    @tvm.script.ir_module
+    class Expected7:
+        @R.function
+        def main(
+            inp_0: R.Tensor((1, 3, 5, 3), dtype="float32"),
+        ) -> R.Tensor((), dtype="float32"):
+            with R.dataflow():
+                lv: R.Tensor((1, 3, 5, 3), dtype="float32") = R.multiply(inp_0, inp_0)
+                lv1: R.Tensor((), dtype="float32") = R.sum(lv, axis=None, keepdims=False)
+                lv2: R.Tensor((), dtype="float32") = R.sqrt(lv1)
+                gv: R.Tensor((), dtype="float32") = lv2
+                R.output(gv)
+            return gv
+
+    norms = [
+        (float("inf"), None, False),
+        (float("-inf"), None, False),
+        (float(2), None, False),
+        (float(1.0), None, False),
+        (float(-4), None, True),
+        (float(0.5), None, True),
+        ("fro", None, False),
+    ]
+
+    for norm, expected in zip(
+        norms, [Expected1, Expected2, Expected3, Expected4, Expected5, Expected6, Expected7]
+    ):
+        p, dim, keepdim = norm
+        verify_model(Norm(p, dim=dim, keepdim=keepdim), input_info, {}, expected)
 
 
 if __name__ == "__main__":

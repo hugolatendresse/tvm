@@ -21,7 +21,7 @@
 import abc
 from functools import reduce
 import math
-from typing import Callable, Dict, Optional, Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, Union, List
 
 from tvm import relax
 
@@ -102,6 +102,16 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
             return {self._retrieve_args(k): self._retrieve_args(v) for k, v in node.items()}
         else:
             return node
+
+    def _check_unsupported_func_type(self, nodes: List[fx.Node]):
+        missing_func_types = list(
+            {
+                node.target.__name__
+                for node in nodes
+                if node.op == "call_function" and node.target.__name__ not in self.convert_map
+            }
+        )
+        assert not missing_func_types, f"Unsupported function types {missing_func_types}"
 
     ########## Unary Ops ##########
 
@@ -307,6 +317,12 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         x = self.env[node.args[0]]
         dim = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim", -1)
         return self.block_builder.emit(relax.op.nn.softmax(x, dim))
+
+    def _softplus(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        beta = node.args[1] if len(node.args) > 1 else node.kwargs.get("beta", 1.0)
+        threshold = node.args[2] if len(node.args) > 2 else node.kwargs.get("threshold", 20.0)
+        return self.block_builder.emit(relax.op.nn.softplus(x, beta, threshold))
 
     def _softshrink(self, node: fx.Node) -> relax.Var:
         """
@@ -911,6 +927,40 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         keepdim = args[2] if len(node.args) > 2 else node.kwargs.get("keepdim", False)
         return self.block_builder.emit(relax.op.mean(x, dim, keepdims=keepdim))
 
+    def _norm(self, node: fx.Node) -> relax.Var:
+        data = self.env[node.args[0]]
+        dtype = data.struct_info.dtype
+        order = node.args[1] if len(node.args) > 1 else node.kwargs.get("p", 2)
+        axis = node.args[2] if len(node.args) > 2 else None
+        keepdims = node.args[3] if len(node.args) > 3 else False
+
+        if order == float("inf"):
+            return self.block_builder.emit(
+                relax.op.max(relax.op.abs(data), axis=axis, keepdims=keepdims)
+            )
+        elif order == float("-inf"):
+            return self.block_builder.emit(
+                relax.op.min(relax.op.abs(data), axis=axis, keepdims=keepdims)
+            )
+        # frobenius_norm
+        elif order == "fro":
+            return self.block_builder.emit(
+                relax.op.sqrt(
+                    relax.op.sum(relax.op.multiply(data, data), axis=axis, keepdims=keepdims),
+                )
+            )
+        else:
+            reci_order = relax.const(1 / order, dtype=dtype)
+            order = relax.const(order, dtype=dtype)
+            return self.block_builder.emit(
+                relax.op.power(
+                    relax.op.sum(
+                        relax.op.power(relax.op.abs(data), order), axis=axis, keepdims=keepdims
+                    ),
+                    reci_order,
+                )
+            )
+
     def _prod(self, node: fx.Node) -> relax.Var:
         args = self.retrieve_args(node)
         x = args[0]
@@ -965,6 +1015,12 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
         dim = node.args[1] if len(node.args) > 1 else node.kwargs.get("dim", -1)
         descending = node.args[2] if len(node.args) > 2 else node.kwargs.get("descending", False)
         return self.block_builder.emit(relax.op.argsort(x, dim, descending))
+
+    def _broadcast_to(self, node: fx.Node) -> relax.Var:
+        args = self.retrieve_args(node)
+        x = args[0]
+        shape = args[1] if len(args) > 1 else args[0]
+        return self.block_builder.emit(relax.op.broadcast_to(x, shape))
 
     def _cat(self, node: fx.Node) -> relax.Var:
         args = self.retrieve_args(node)
@@ -1278,8 +1334,13 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
 
     def _full_like(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
+<<<<<<< HEAD
         rx_value = relax.const(node.args[1])
         return self.block_builder.emit(relax.op.full_like(x, rx_value))
+=======
+        fill_value = relax.const(node.args[1])
+        return self.block_builder.emit(relax.op.full_like(x, fill_value))
+>>>>>>> main
 
     def _index_select(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]

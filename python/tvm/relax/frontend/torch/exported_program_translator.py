@@ -39,8 +39,8 @@ class ExportedProgramImporter(BaseFXGraphImporter):
     def _hardtanh(self, node: fx.Node) -> relax.Expr:
         args = self.retrieve_args(node)
         x = args[0]
-        min_val = node.args[1] if len(args) > 1 else node.kwargs("min_val", -1.0)
-        max_val = node.args[2] if len(args) > 2 else node.kwargs("max_val", 1.0)
+        min_val = node.args[1] if len(args) > 1 else node.kwargs.get("min_val", -1.0)
+        max_val = node.args[2] if len(args) > 2 else node.kwargs.get("max_val", 1.0)
         return self.block_builder.emit(relax.op.clip(x, min_val, max_val))
 
     def _log2(self, node: fx.Node) -> relax.Var:
@@ -202,6 +202,13 @@ class ExportedProgramImporter(BaseFXGraphImporter):
 
     ########## Manipulation ##########
 
+    def _narrow(self, node: fx.Node) -> relax.Var:
+        x = self.env[node.args[0]]
+        dim = node.args[1]
+        start = node.args[2]
+        length = node.args[3]
+        return self.block_builder.emit(relax.op.strided_slice(x, [dim], [start], [length]))
+
     def _select(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
         dim = node.args[1]
@@ -215,6 +222,19 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         end = [node.args[3]]
         stride = [node.args[4] if len(node.args) > 4 else 1]
         return self.block_builder.emit(relax.op.strided_slice(x, axes, begin, end, stride))
+
+    def _unflatten(self, node: fx.Node) -> relax.Var:
+        args = self.retrieve_args(node)
+        x = args[0]
+        dim = node.args[1]
+        sizes = node.args[2]
+
+        x_shape = list(self.shape_of(x))
+        if dim < 0:
+            dim += len(x_shape)
+
+        new_shape = x_shape[:dim] + sizes + x_shape[dim + 1 :]
+        return self.block_builder.emit(relax.op.reshape(x, new_shape))
 
     ########## Creation ##########
 
@@ -258,6 +278,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "cos.default": self._unary_op(relax.op.cos),
             "cosh.default": self._unary_op(relax.op.cosh),
             "dropout.default": lambda node: self.env[node.args[0]],
+            "dropout_.default": lambda node: self.env[node.args[0]],
             "elu.default": self._elu,
             "erf.default": self._unary_op(relax.op.erf),
             "exp.default": self._unary_op(relax.op.exp),
@@ -265,7 +286,9 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "gelu.default": self._gelu,
             "hardsigmoid.default": self._hardsigmoid,
             "hardswish.default": self._hardswish,
+            "hardswish_.default": self._hardswish,
             "hardtanh.default": self._hardtanh,
+            "hardtanh_.default": self._hardtanh,
             "isfinite.default": self._unary_op(relax.op.isfinite),
             "isinf.default": self._unary_op(relax.op.isinf),
             "isnan.default": self._unary_op(relax.op.isnan),
@@ -278,15 +301,18 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "neg.default": self._unary_op(relax.op.negative),
             "reciprocal.default": self._reciprocal,
             "relu.default": self._unary_op(relax.op.nn.relu),
+            "relu_.default": self._unary_op(relax.op.nn.relu),
             "round.default": self._round,
             "rsqrt.default": self._unary_op(relax.op.rsqrt),
             "selu.default": self._unary_op(relax.op.nn.selu),
             "sigmoid.default": self._unary_op(relax.op.sigmoid),
             "sign.default": self._unary_op(relax.op.sign),
             "silu.default": self._unary_op(relax.op.nn.silu),
+            "silu_.default": self._unary_op(relax.op.nn.silu),
             "sin.default": self._unary_op(relax.op.sin),
             "sinh.default": self._unary_op(relax.op.sinh),
             "softmax.int": self._softmax,
+            "softplus.default": self._softplus,
             "softshrink.default": self._softshrink,
             "sqrt.default": self._unary_op(relax.op.sqrt),
             "square.default": self._unary_op(relax.op.square),
@@ -296,6 +322,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "triu.default": self._tril_triu(relax.op.triu),
             # binary
             "add.Tensor": self._binary_op(relax.op.add, operator.add),
+            "add_.Tensor": self._binary_op(relax.op.add, operator.add),
             "div.Tensor": self._binary_op(relax.op.divide, operator.truediv),
             "eq.Scalar": self._binary_op(relax.op.equal, operator.eq),
             "eq.Tensor": self._binary_op(relax.op.equal, operator.eq),
@@ -370,6 +397,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "where.self": self._where,
             # tensor manipulation
             "argsort.default": self._argsort,
+            "broadcast_to.default": self._broadcast_to,
             "cat.default": self._cat,
             "chunk.default": self._chunk,
             "clamp.Tensor": self._clamp,
@@ -383,6 +411,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "flatten.using_ints": self._flatten,
             "flip.default": self._flip,
             "gather.default": self._gather,
+            "narrow.default": self._narrow,
             "permute.default": self._permute,
             "repeat.default": self._repeat,
             "select.int": self._select,
@@ -397,6 +426,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "tile.default": self._tile,
             "topk.default": self._topk,
             "transpose.int": self._transpose,
+            "unflatten.int": self._unflatten,
             "unsqueeze.default": lambda node: self.block_builder.emit(
                 relax.op.expand_dims(self.env[node.args[0]], node.args[1])
             ),
@@ -414,13 +444,13 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "empty.memory_format": self._empty,
             "empty_like.default": self._empty_like,
             "fill.Scalar": self._fill,
-            "full": self._full,
-            "full_like": self._full_like,
+            "full.default": self._full,
+            "full_like.default": self._full_like,
             "index_select.default": self._index_select,
             "lift_fresh_copy.default": self._to_copy,
             "new_ones.default": self._new_ones,
             "one_hot.default": self._one_hot,
-            "ones": self._ones,
+            "ones.default": self._ones,
             # datatype
             "to.dtype": self._to,
             "to.dtype_layout": self._to,
@@ -434,24 +464,34 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         """Create relax input vars."""
         parameters_buffers_constants = OrderedDict()
         user_inputs = OrderedDict()
+        torch_symbol_to_relax_var: Dict[str, tvm.tir.Var] = {}
+
         for spec in exported_program.graph_signature.input_specs:
             name_hint = spec.arg.name
             if spec.kind is torch.export.graph_signature.InputKind.CONSTANT_TENSOR:
-                shape = exported_program.tensor_constants[spec.target].shape
+                torch_shape = exported_program.tensor_constants[spec.target].shape
                 torch_dtype = exported_program.tensor_constants[spec.target].dtype
             elif spec.kind is torch.export.graph_signature.InputKind.USER_INPUT:
                 for node in exported_program.graph.find_nodes(op="placeholder", target=spec.target):
                     if node.name == name_hint and "tensor_meta" in node.meta:
-                        shape = node.meta["tensor_meta"].shape
+                        torch_shape = node.meta["tensor_meta"].shape
                         torch_dtype = node.meta["tensor_meta"].dtype
                         break
             else:
                 # PARAMETER or BUFFER
-                shape = exported_program.state_dict[spec.target].shape
+                torch_shape = exported_program.state_dict[spec.target].shape
                 torch_dtype = exported_program.state_dict[spec.target].dtype
 
+            # TODO(mshr-h): Support range constraints
+            relax_shape = [
+                torch_symbol_to_relax_var.setdefault(str(s), tvm.tir.SizeVar(str(s), "int64"))
+                if isinstance(s, torch.SymInt)
+                else s
+                for s in torch_shape
+            ]
             dtype = self._convert_data_type(torch_dtype)
-            relax_var = relax.Var(name_hint, relax.TensorStructInfo(shape, dtype))
+
+            relax_var = relax.Var(name_hint, relax.TensorStructInfo(relax_shape, dtype))
             if spec.kind is torch.export.graph_signature.InputKind.USER_INPUT:
                 user_inputs[name_hint] = relax_var
             else:
@@ -480,11 +520,16 @@ class ExportedProgramImporter(BaseFXGraphImporter):
         func_attrs = {"num_input": len(user_input_vars)} if keep_params_as_input else None
 
         nodes: List[fx.Node] = exported_program.graph.nodes
+
+        # Find all the missing function types
+        self._check_unsupported_func_type(nodes)
+
         with self.block_builder.function(
             name=func_name, params=list(inputs_vars.values()).copy(), attrs=func_attrs
         ):
             output = None
             with self.block_builder.dataflow():
+
                 # Translate the model.
                 for node in nodes:
                     if node.op == "placeholder":
@@ -511,9 +556,6 @@ class ExportedProgramImporter(BaseFXGraphImporter):
                         self.env[node] = getattr(exported_program.graph_module, node.target)
                     elif node.op == "call_function":
                         func_name = node.target.__name__
-                        assert (
-                            func_name in self.convert_map
-                        ), f"Unsupported function type {func_name}"
                         self.env[node] = self.convert_map[func_name](node)
                     else:
                         raise ValueError(f"Unsupported op {node.op}")
