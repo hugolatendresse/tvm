@@ -64,6 +64,54 @@ def assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, tar
 
 
 @tvm.testing.parametrize_targets("cuda")
+def test_full(target, dev):
+    class FullModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+
+        def forward(self, x):
+            return torch.full((2, 3), 3.141592)
+
+    torch_module = FullModel().eval()
+
+    raw_data = np.random.rand(3, 3).astype("float32")
+
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
+def test_full_like(target, dev):
+    class FullLike(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.fill_value = 7.0
+
+        def forward(self, x):
+            return torch.full_like(x, self.fill_value)
+
+    torch_module = FullLike().eval()
+    raw_data = np.random.rand(2, 3).astype("float32")
+
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
+def test_ones(target, dev):
+    class FullModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+
+        def forward(self, x):
+            return torch.ones((2, 3))
+
+    torch_module = FullModel().eval()
+
+    raw_data = np.random.rand(1, 1).astype("float32")
+
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
 def test_tensor_clamp(target, dev):
     class ClampBothTensor(torch.nn.Module):
         def __init__(self):
@@ -468,18 +516,6 @@ def test_chunk_too_many(target, dev):
 
 
 @tvm.testing.parametrize_targets("cuda")
-def test_index_select(target, dev):
-    class IndexSelectModel(nn.Module):
-        def forward(self, x):
-            indices = torch.tensor([0, 2])
-            return torch.index_select(x, 0, indices)
-
-    raw_data = np.random.rand(3, 4).astype("float32")
-    torch_module = IndexSelectModel().eval()
-    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
-
-
-@tvm.testing.parametrize_targets("cuda")
 def test_arange(target, dev):
     # arange.default
     raw_data = np.array([0, 0, 0, 0, 0])
@@ -509,6 +545,46 @@ def test_arange(target, dev):
             return x + torch.arange(1, 2.5, 0.5, dtype=torch.float32)
 
     torch_module = ArangeStartStopModel().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
+def test_index_select(target, dev):
+    class IndexSelectModel(nn.Module):
+        def forward(self, x):
+            indices = torch.tensor([0, 2])
+            return torch.index_select(x, 0, indices)
+
+    raw_data = np.random.rand(3, 4).astype("float32")
+    torch_module = IndexSelectModel().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
+def test_stack(target, dev):
+    class StackModel(nn.Module):
+        def forward(self, x):
+            val1 = x[1, 4]
+            val2 = x[3, 2]
+            val3 = x[5, 6]
+            z = torch.stack([val1, val2, val3])
+            return z
+
+    torch_module = StackModel().eval()
+    raw_data = np.random.rand(10, 10, 10).astype("float32")
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
+def test_sum(target, dev):
+    class SumModel(nn.Module):
+        def forward(self, x):
+            new_vec = x[1, 4]
+            return new_vec.sum()
+
+    torch_module = SumModel().eval()
+
+    raw_data = np.random.rand(10, 10, 10).astype("float32")
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
 
