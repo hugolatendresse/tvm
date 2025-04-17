@@ -1334,13 +1334,8 @@ class BaseFXGraphImporter(metaclass=abc.ABCMeta):
 
     def _full_like(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
-<<<<<<< HEAD
-        rx_value = relax.const(node.args[1])
-        return self.block_builder.emit(relax.op.full_like(x, rx_value))
-=======
         fill_value = relax.const(node.args[1])
         return self.block_builder.emit(relax.op.full_like(x, fill_value))
->>>>>>> main
 
     def _index_select(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
