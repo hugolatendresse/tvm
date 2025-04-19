@@ -66,7 +66,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
 
     ########## Neural Network ##########
 
-    def _batch_norm(self, node: fx.Node, training) -> relax.Var:
+    def _batch_norm(self, node: fx.Node, training: bool) -> relax.Var:
         import numpy as np
 
         x = self.env[node.args[0]]
