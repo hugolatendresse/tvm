@@ -90,6 +90,7 @@ def test_full_like(target, dev):
 
     torch_module = FullLike().eval()
     raw_data = np.random.rand(2, 3).astype("float32")
+
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
 
