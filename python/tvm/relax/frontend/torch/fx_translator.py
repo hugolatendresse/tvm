@@ -259,27 +259,6 @@ class TorchFXImporter(BaseFXGraphImporter):
             )
         )
 
-    def _cross_entropy_module(self, node: fx.Node) -> relax.Expr:
-        preds = self.env[node.args[0]]
-        targets = self.env[node.args[1]]
-        module = self.named_modules[node.target]
-
-        weights = module.weight
-        if weights is not None:
-            if weights in self.params:
-                weights = self.params[weights]
-            else:
-                weights = relax.const(weights.numpy(), preds.struct_info.dtype)
-
-        reduction = module.reduction
-        ignore_index = module.ignore_index
-
-        return self.block_builder.emit(
-            relax.op.nn.nll_loss(
-                relax.op.nn.log_softmax(preds), targets, weights, reduction, ignore_index
-            )
-        )
-
     def _embedding_module(self, node: fx.Node) -> relax.Var:
         x = self.env[node.args[0]]
         module = self.named_modules[node.target]
