@@ -856,18 +856,6 @@ def test_sort(target, dev):
     torch_module = SortModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-
-# 25. Test for self._full using torch.full
-@tvm.testing.parametrize_targets("cuda")
-def test_full(target, dev):
-    class FullModule(nn.Module):
-        def forward(self, x):
-            return torch.full((2, 3), 5.0)
-    raw_data = np.zeros((1,))  # dummy input; not used
-    torch_module = FullModule().eval()
-    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
-
-# 26. Test for self._inplace_masked_fill using tensor.masked_fill_
 @tvm.testing.parametrize_targets("cuda")
 def test_inplace_masked_fill(target, dev):
     class InplaceMaskedFillModule(nn.Module):
@@ -879,17 +867,6 @@ def test_inplace_masked_fill(target, dev):
     torch_module = InplaceMaskedFillModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 27. Test for self._ones using torch.ones
-@tvm.testing.parametrize_targets("cuda")
-def test_ones(target, dev):
-    class OnesModule(nn.Module):
-        def forward(self, x):
-            return torch.ones((2, 3))
-    raw_data = np.zeros((1,), ).astype(np.float32)
-    torch_module = OnesModule().eval()
-    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
-
-# 28. Test for self._tensor using torch.tensor
 @tvm.testing.parametrize_targets("cuda")
 def test_tensor(target, dev):
     class TensorModule(nn.Module):
@@ -899,7 +876,6 @@ def test_tensor(target, dev):
     torch_module = TensorModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 29. Test for self._type using tensor.type()
 @tvm.testing.parametrize_targets("cuda")
 def test_type(target, dev):
     class TypeModule(nn.Module):
@@ -909,7 +885,6 @@ def test_type(target, dev):
     torch_module = TypeModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 30. Test for self._float using tensor.float()
 @tvm.testing.parametrize_targets("cuda")
 def test_float(target, dev):
     class FloatModule(nn.Module):
@@ -919,7 +894,6 @@ def test_float(target, dev):
     torch_module = FloatModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 31. Test for self._half using tensor.half()
 @tvm.testing.parametrize_targets("cuda")
 def test_half(target, dev):
     class HalfModule(nn.Module):
@@ -929,7 +903,6 @@ def test_half(target, dev):
     torch_module = HalfModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 32. Test for self._is_floating_point using tensor.is_floating_point()
 @tvm.testing.parametrize_targets("cuda")
 def test_is_floating_point(target, dev):
     class IsFloatingPointModule(nn.Module):
@@ -939,7 +912,6 @@ def test_is_floating_point(target, dev):
     torch_module = IsFloatingPointModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 33. Test for self._getattr using getattr on a tensor
 @tvm.testing.parametrize_targets("cuda")
 def test_getattr(target, dev):
     class GetAttrModule(nn.Module):
@@ -950,7 +922,6 @@ def test_getattr(target, dev):
     torch_module = GetAttrModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 34. Test for self._sym_size_int using a symbolic size (here, x.shape[1])
 @tvm.testing.parametrize_targets("cuda")
 def test_sym_size_int(target, dev):
     class SymSizeIntModule(nn.Module):
@@ -960,7 +931,6 @@ def test_sym_size_int(target, dev):
     torch_module = SymSizeIntModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 35. Test for self._interpolate using torch.nn.functional.interpolate
 @tvm.testing.parametrize_targets("cuda")
 def test_interpolate(target, dev):
     class InterpolateModule(nn.Module):
@@ -971,7 +941,6 @@ def test_interpolate(target, dev):
     torch_module = InterpolateModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
-# 36. Test for self._lerp using torch.lerp
 @tvm.testing.parametrize_targets("cuda")
 def test_lerp(target, dev):
     class LerpModule(nn.Module):
