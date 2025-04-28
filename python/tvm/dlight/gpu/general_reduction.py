@@ -48,6 +48,12 @@ class GeneralReduction(GPUScheduleRule):
             len_tx = 64
             unroll_depth = 64
 
+        # **** CORRECTED PRINT STATEMENT ****
+        func_name = func.attrs.get('global_symbol', '<no global_symbol>') if func.attrs else '<no attrs>'
+        print(f"[GeneralReduction Debug] Target: {target.kind.name}, len_tx: {len_tx}, Function: {func_name}")
+        # ***********************************
+        
+
         sch = tir.Schedule(func)
         block_infos = normalize_prim_func(sch)
         block_infos = try_inline_contiguous_spatial(sch, block_infos)
@@ -61,8 +67,8 @@ class GeneralReduction(GPUScheduleRule):
         # Align the number of block iters of the last block.
         num_last_block_iter = len(block_infos[-1].dom_kind())
 
-        # If the last block is a scalar value, there is nothing left to
-        # tile/parallelise, and  `iters` is an empty tuple.
+        # If the last block is a scalar value, there is nothing left to     # <--- START OF REPLACEMENT BLOCK
+        # tile/parallelise, and `iters` is an empty tuple.
         # Add a unit thread loop so the final write happens inside a valid
         # GPU thread environment.
         if num_last_block_iter == 0:
@@ -70,14 +76,19 @@ class GeneralReduction(GPUScheduleRule):
             # scalar write) inside a trivial GPU thread. The very first block
             # gets a `blockIdx.x` wrapper so that kernels still have a unique
             # block scope.
+            # Bind subsequent blocks to threadIdx.y to avoid conflict with
+            # threadIdx.x bindings used by other schedule rules or the main
+            # path of this rule.
             for i, info in enumerate(block_infos):
                 loop_rv = sch.add_unit_loop(info.block_rv)
                 if i == 0:
                     sch.bind(loop_rv, "blockIdx.x")
                 else:
-                    sch.bind(loop_rv, "threadIdx.x")
+                    # *** Use threadIdx.y to avoid conflicts ***
+                    sch.bind(loop_rv, "threadIdx.y")
+                    # *****************************************
 
-            return sch
+            return sch    
 
         if num_last_block_iter < len(dom_kind):
 
@@ -163,7 +174,7 @@ class GeneralReduction(GPUScheduleRule):
         r_loop, tx = sch.split(loops[-1], [None, len_tx])
         sch.reorder(tx, r_loop)
         sch.bind(bx, "blockIdx.x")
-        sch.bind(tx, "threadIdx.x")
+        sch.bind(tx, "threadIdx.y")
         sch.annotate(r_loop, ann_key="pragma_auto_unroll_max_step", ann_val=unroll_depth)
         sch.annotate(r_loop, ann_key="pragma_unroll_explicit", ann_val=1)
 
@@ -175,7 +186,7 @@ class GeneralReduction(GPUScheduleRule):
             r_loop = sch.fuse(*sch.get_loops(block)[-num_trailing_r:])
             r_loop, tx = sch.split(r_loop, [None, len_tx])
             sch.reorder(tx, r_loop)
-            sch.bind(tx, "threadIdx.x")
+            sch.bind(tx, "threadIdx.y")
             sch.annotate(r_loop, ann_key="pragma_auto_unroll_max_step", ann_val=unroll_depth)
             sch.annotate(r_loop, ann_key="pragma_unroll_explicit", ann_val=1)
 
