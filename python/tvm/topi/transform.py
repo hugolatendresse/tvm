@@ -403,23 +403,25 @@ def concatenate(a_tuple, axis=0):
     return cpp.concatenate(a_tuple, axis)
 
 
-def stack(a, axis):
-    """Repeats the whole array multiple times.
+def stack(tensors, axis=0):
+    """Join a sequence of tensors along a new axis.
 
     Parameters
     ----------
-    a : tvm.te.Tensor
-        The tensor to be stacked.
+    tensors : tuple or list of tvm.te.Tensor
+        The tensors to be stacked. All tensors must have the same shape.
 
     axis : int, optional
-        The axis in the result array along which the input arrays are stacked.
-
+        The axis in the resulting tensor along which the input tensors will be stacked.
+        Negative values wrap around. Default is 0.
 
     Returns
     -------
     ret : tvm.te.Tensor
+        The stacked tensor with an additional dimension compared to the input tensors.
+
     """
-    return cpp.stack(a, axis)
+    return cpp.stack(tensors, axis)
 
 
 def split(ary, indices_or_sections, axis=0):
@@ -1052,3 +1054,54 @@ def trilu(data, k, upper):
         return tvm.tir.Select(check_position, value, tvm.tir.const(0, data.dtype))
 
     return te.compute(data.shape, _apply_trilu, name="trilu", tag=topi.tag.ELEMWISE)
+
+
+def index_tensor(data, indices):
+    """Advanced‑tensor indexing (NumPy/PyTorch‐style).
+
+    Given k index tensors ``indices = (I0, I1, …, Ik‑1)`` this
+    operator selects elements from ``data`` as if one had written
+    ``data[I0, I1, …, Ik‑1]`` in NumPy/PyTorch:
+
+    * All index tensors must have an integer dtype.
+    * Their shapes are broadcast together to a common shape ``B`` in
+      the usual NumPy way.
+    * The result shape is ``B + data.shape[k:]`` (i.e. the broadcast
+      shape followed by the remaining axes of ``data`` that are *not*
+      indexed).
+    *  ``k`` must not exceed ``data.ndim``; otherwise a compile‑time
+       error is raised.
+
+    Parameters
+    ----------
+    data : tvm.te.Tensor
+        The tensor to be indexed.
+
+    indices : Sequence[tvm.te.Tensor]
+        A Python ``list`` / ``tuple`` of **k** index tensors,
+        or a `tvm.te.Tensor` tuple expression. Each tensor must have an
+        integer dtype.
+
+    Returns
+    -------
+    result : tvm.te.Tensor
+        The tensor obtained after advanced indexing.  Its dtype equals
+        ``data.dtype``
+
+    Examples
+    --------
+    .. code-block:: python
+
+        x     = te.placeholder((3, 3),  name="x")        # shape (3,3)
+        row   = te.placeholder((2,),    name="row", dtype="int32")
+        col   = te.placeholder((2,),    name="col", dtype="int32")
+
+        # Equivalent to x[row, col] in NumPy / PyTorch
+        y = topi.index_tensor(x, [row, col])             # shape (2,)
+
+        # Broadcasting example:
+        row = te.placeholder((2, 1), name="row", dtype="int32")
+        col = te.placeholder((1, 3), name="col", dtype="int32")
+        z = topi.index_tensor(x, [row, col])             # shape (2, 3)
+    """
+    return topi.adv_index(data, indices)

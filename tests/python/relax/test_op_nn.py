@@ -36,6 +36,10 @@ def test_op_correctness():
     assert relax.op.nn.pad(x, (1, 1, 1, 1)).op == Op.get("relax.nn.pad")
 
     x = relax.Var("x", R.Tensor((2, 3, 32, 32), "float32"))
+    alpha = relax.Var("alpha", R.Tensor((3,), "float32"))
+    assert relax.op.nn.prelu(x, alpha, axis=1).op == Op.get("relax.nn.prelu")
+
+    x = relax.Var("x", R.Tensor((2, 3, 32, 32), "float32"))
     gamma = relax.Var("gamma", R.Tensor((3,), "float32"))
     beta = relax.Var("beta", R.Tensor((3,), "float32"))
     moving_mean = relax.Var("moving_mean", R.Tensor((3,), "float32"))
@@ -1815,6 +1819,26 @@ def test_pad_infer_struct_info():
     )
     _check_inference(
         bb, relax.op.nn.pad(x1, pad_width1), relax.TensorStructInfo(dtype="float32", ndim=2)
+    )
+
+
+def test_pixel_shuffle_infer_struct_info():
+    bb = relax.BlockBuilder()
+    x1 = relax.Var("x1", R.Tensor((1, 8, 10, 15), "float32"))
+    x2 = relax.Var("x2", R.Tensor((2, 6, 18, 5, 4), "float32"))
+
+    upscale_factor1 = 2
+    _check_inference(
+        bb,
+        relax.op.nn.pixel_shuffle(x1, upscale_factor1),
+        relax.TensorStructInfo((1, 2, 20, 30), dtype="float32"),
+    )
+
+    upscale_factor2 = 3
+    _check_inference(
+        bb,
+        relax.op.nn.pixel_shuffle(x2, upscale_factor2),
+        relax.TensorStructInfo((2, 6, 2, 15, 12), dtype="float32"),
     )
 
 

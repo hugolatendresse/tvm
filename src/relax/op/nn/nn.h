@@ -57,6 +57,9 @@ Expr gelu(Expr data);
 /*! \brief Gaussian Error Linear Units function approximated by tanh. */
 Expr gelu_tanh(Expr data);
 
+/*! \brief Parametric Rectified Linear Unit function.*/
+Expr prelu(Expr data, Expr alpha, int axis);
+
 /*! \brief Scaled Exponential Linear Unit function. */
 Expr selu(Expr data);
 
@@ -71,6 +74,9 @@ Expr softplus(Expr data, double beta, double threshold);
 
 /*! \brief LogSoftmax function. */
 Expr log_softmax(Expr data, int axis);
+
+/*! \brief Pixel Shuffle function. */
+Expr pixel_shuffle(Expr data, int upscale_factor);
 
 /*! \brief Compute batch normalization. */
 Expr batch_norm(Expr data, Expr gamma, Expr beta, Expr moving_mean, Expr moving_var,  //

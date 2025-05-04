@@ -95,6 +95,8 @@ from .manipulate import (
     flip,
     gather_elements,
     gather_nd,
+    index_put,
+    index_tensor,
     layout_transform,
     one_hot,
     permute_dims,
@@ -104,6 +106,7 @@ from .manipulate import (
     scatter_nd,
     split,
     squeeze,
+    stack,
     tile,
 )
 from .mask import masked_fill

@@ -117,7 +117,13 @@ Expr split(Expr x, Variant<IntImm, Array<IntImm>> indices_or_sections, int axis)
  * \return The squeezed result.
  */
 Expr squeeze(Expr x, Optional<Array<Integer>> axis);
-
+/*!
+ * \brief Stack tensors along the specified axis.
+ * \param tensors The input tensors to be stacked.
+ * \param axis The axis along which the tensors will be stacked.
+ * \return The stacked result.
+ */
+Expr stack(Expr tensors, Optional<Integer> axis);
 /*!
  * \brief Return a summation of data to the shape of collapse_target.
  * For details, please see the operator `relax.collapse_sum_to`.
@@ -199,6 +205,31 @@ Expr gather_elements(Expr data, Expr indices, int axis = 0);
  * indices.shape[-1]:]
  */
 Expr gather_nd(Expr data, Expr indices, int batch_dims = 0);
+
+/*!
+ * \brief NumPy/PyTorch‑style advanced indexing with tensors.
+ * \param data The input tensor.
+ * \param indices  A Tuple expression (or list) containing the index tensors.
+ * \return The indexed tensor.
+ *
+ * \note When all shapes are static, Relax checks that the index shapes are
+ *       broadcast-compatible. Bounds checking of the values in indices is
+ *       deferred to runtime.
+ */
+Expr index_tensor(Expr data, Expr indices);
+
+/*!
+ * \brief Put values into an array according to indices.
+ * \param data The input tensor to be modified.
+ * \param indices The index positions where values should be placed.
+ *                This should be a tuple of 1D tensors (one for each dimension).
+ * \param values The values to place at the specified indices.
+ * \param accumulate Whether to accumulate (add) values rather than replace.
+ *                  If true, equivalent to tensor[indices] += values.
+ *                  If false, equivalent to tensor[indices] = values.
+ * \return The computed result with values placed at specified indices.
+ */
+Expr index_put(Expr data, Expr indices, Expr values, bool accumulate = false);
 
 /*!
  * \brief Scatter updates into an array according to indices.

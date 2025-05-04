@@ -49,6 +49,7 @@ register_legalize(
     "relax.collapse_sum_like",
     _reshape(topi.collapse_sum, "collapse_sum", is_collapse_sum_like=True),
 )
+
 register_legalize("relax.collapse_sum_to", _reshape(topi.collapse_sum, "collapse_sum"))
 
 
@@ -118,6 +119,28 @@ def _squeeze(bb: BlockBuilder, call: Call) -> Expr:
     return bb.call_te(topi.squeeze, call.args[0], call.attrs.axis)
 
 
+@register_legalize("relax.stack")
+def _stack(bb: BlockBuilder, call: Call) -> Expr:
+    t = call.args[0]
+    n_field = len(t.struct_info.fields)
+
+    # Follow bindings to find the actual tuple
+    while isinstance(t, Var):
+        binding = bb.lookup_binding(t)
+        if not isinstance(binding, (Tuple, Var)):
+            break
+        t = binding
+
+    assert isinstance(t, (Tuple, Var))
+
+    # Extract fields from either Tuple or bound Var
+    fields = (
+        t.fields if isinstance(t, Tuple) else [bb.emit(TupleGetItem(t, i)) for i in range(n_field)]
+    )
+
+    return bb.call_te(topi.stack, fields, 0 if call.attrs.axis is None else call.attrs.axis.value)
+
+
 @register_legalize("relax.repeat")
 def _repeat(bb: BlockBuilder, call: Call) -> Expr:
     def te_repeat(data: te.Tensor, repeats: IntImm, axis: Optional[IntImm]):
@@ -160,6 +183,36 @@ def _gather_nd(bb: BlockBuilder, call: Call) -> Expr:
         return topi.gather_nd(data, indices, batch_dims)
 
     return bb.call_te(te_gather_nd, call.args[0], call.args[1], int(call.attrs.batch_dims))
+
+
+@register_legalize("relax.index_tensor")
+def _index_tensor(bb: BlockBuilder, call: Call) -> Expr:
+    t = call.args[1]
+    n_field = len(t.struct_info.fields)
+    fields = [bb.emit(TupleGetItem(t, i)) for i in range(n_field)]
+    return bb.call_te(topi.index_tensor, call.args[0], fields)
+
+
+@register_legalize("relax.index_put")
+def _index_put(bb: BlockBuilder, call: Call) -> Expr:
+    data = call.args[0]
+    indices = call.args[1]
+    values = call.args[2]
+    accumulate = call.attrs.accumulate
+
+    # If indices is a Tuple, unpack it into individual tensors
+    if isinstance(indices, relax.Tuple):
+        indices_list = [indices.fields[i] for i in range(len(indices.fields))]
+    else:
+        indices_list = [indices]
+
+    return bb.call_te(
+        topi.index_put,
+        data,
+        indices_list,
+        values,
+        accumulate=accumulate,
+    )
 
 
 @register_legalize("relax.scatter_elements")
