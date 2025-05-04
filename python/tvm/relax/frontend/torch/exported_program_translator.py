@@ -439,6 +439,7 @@ class ExportedProgramImporter(BaseFXGraphImporter):
             "clamp.Tensor": self._clamp,
             "concat.default": self._cat,
             "copy_.default": self._copy_,
+            "cross_entropy_loss.default": self._cross_entropy_module,
             "cumsum.default": self._cumsum,
             "cumprod.default": self._cumprod,
             "expand.default": self._expand,

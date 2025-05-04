@@ -25,6 +25,7 @@ from torch.nn import functional as F
 from torch.export import export
 from tvm.relax.frontend.torch import from_exported_program
 from torch.nn import Softmax, Upsample
+import torch.nn.functional as F
 
 
 def assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev):
@@ -864,6 +865,36 @@ def test_conv3d_module(target, dev):
 
 
 @tvm.testing.parametrize_targets("cuda")
+def test_conv_transpose1d_module(target, dev):
+    class ConvTranspose1dModule(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv_transpose = nn.ConvTranspose1d(in_channels=3, out_channels=2, kernel_size=3)
+
+        def forward(self, x):
+            return self.conv_transpose(x)
+
+    raw_data = np.random.randn(2, 3, 10).astype(np.float32)
+    torch_module = ConvTranspose1dModule().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
+def test_conv_transpose2d_module(target, dev):
+    class ConvTranspose2dModule(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv_transpose = nn.ConvTranspose2d(in_channels=3, out_channels=2, kernel_size=3)
+
+        def forward(self, x):
+            return self.conv_transpose(x)
+
+    raw_data = np.random.randn(2, 3, 10, 10).astype(np.float32)
+    torch_module = ConvTranspose2dModule().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
 def test_group_norm_module(target, dev):
     class GroupNormModule(nn.Module):
         def __init__(self):
@@ -965,6 +996,19 @@ def test_numel(target, dev):
 
 
 @tvm.testing.parametrize_targets("cuda")
+def test_scatter(target, dev):
+    class ScatterModule(nn.Module):
+        def forward(self, x):
+            index = torch.tensor([[0, 1, 0], [1, 0, 1]])
+            src = torch.full_like(x, 10.0)
+            return x.scatter(dim=1, index=index, src=src)
+
+    raw_data = np.random.randn(2, 3).astype(np.float32)
+    torch_module = ScatterModule().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
 def test_size(target, dev):
     class SizeModule(nn.Module):
         def forward(self, x):
@@ -972,6 +1016,19 @@ def test_size(target, dev):
 
     raw_data = np.random.randn(5, 4).astype(np.float32)
     torch_module = SizeModule().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
+def test_inplace_masked_fill(target, dev):
+    class InplaceMaskedFillModule(nn.Module):
+        def forward(self, x):
+            mask = x > 0.5
+            x.masked_fill_(mask, -1.0)
+            return x
+
+    raw_data = np.random.rand(3, 3).astype(np.float32)
+    torch_module = InplaceMaskedFillModule().eval()
     assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
 
 
@@ -1020,6 +1077,17 @@ def test_half(target, dev):
 
 
 @tvm.testing.parametrize_targets("cuda")
+def test_is_floating_point(target, dev):
+    class IsFloatingPointModule(nn.Module):
+        def forward(self, x):
+            return torch.tensor(x.is_floating_point())
+
+    raw_data = np.random.randn(2, 3).astype(np.float32)
+    torch_module = IsFloatingPointModule().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
+
+@tvm.testing.parametrize_targets("cuda")
 def test_getattr(target, dev):
     class GetAttrModule(nn.Module):
         def forward(self, x):
@@ -1055,6 +1123,16 @@ def test_interpolate(target, dev):
 
 
 @tvm.testing.parametrize_targets("cuda")
+def test_lerp(target, dev):
+    class LerpModule(nn.Module):
+        def forward(self, x):
+            # Lerp between x and a constant tensor (2.0), with weight 0.3.
+            return torch.lerp(x, torch.full_like(x, 2.0), 0.3)
+
+    raw_data = np.random.randn(2, 3).astype(np.float32)
+    torch_module = LerpModule().eval()
+    assert_torch_output_vs_tvm_from_exported_to_cuda(raw_data, torch_module, target, dev)
+
 def test_cross_entropy_module(target, dev):
     class CrossEntropyModule(nn.Module):
         def __init__(self):
